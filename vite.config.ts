@@ -10,10 +10,11 @@ export default defineConfig(async () => ({
   //
   // 1. prevent vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // Keep the Tauri default when available, but let standalone preview/dev
+  // sessions move to the next open port instead of failing at startup.
   server: {
-    port: 1420,
-    strictPort: true,
+    port: Number(process.env.VITE_PORT) || 1420,
+    strictPort: false,
     host: host || false,
     hmr: host
       ? {
