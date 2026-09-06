@@ -1,0 +1,10 @@
+{
+  "_comment": "The phases and their gates. The prose home is the roadmap; this is the machine home. Exactly one phase is open at a time; the desk's dashboard shows its gate.",
+  "loop": "one line that every feature must serve",
+  "cut_list": ["the first thing to cut", "the second"],
+  "phases": [
+    { "id": "1", "name": "Phase 1 — The first playable", "gate": "A stranger plays it for ten minutes and says what it is.", "status": "open", "started": "", "signed": "", "trap": "Building the second thing before the first one is fun." },
+    { "id": "2", "name": "Phase 2 — The game", "gate": "Write it when Phase 1 is signed.", "status": "not-open", "started": "", "signed": "", "trap": "" },
+    { "id": "C", "name": "Carried — no phase", "gate": "Not a phase. Items that outlive one, and references.", "status": "rolling", "started": "", "signed": "", "trap": "" }
+  ]
+}

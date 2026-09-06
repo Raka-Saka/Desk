@@ -1,0 +1,19 @@
+{
+  "_comment": "QA suites the desk can start with one button. Step types: command (a name from desk.json commands), automation (needs desk.json filter_command), shot (needs desk.json shots), sheets (manual, from the sheets file), playtest (manual, the open phase's gate). Automated steps run in order; manual ones wait in the suite run for a person.",
+  "suites": [
+    {
+      "id": "smoke",
+      "name": "Smoke",
+      "description": "Is the tracker sane? Add the project's fast tests here as commands.",
+      "cadence": "every session",
+      "steps": [ { "type": "command", "name": "tracker-check" } ]
+    },
+    {
+      "id": "gate",
+      "name": "The phase gate",
+      "description": "Everything automated, the manual sheets, then a stranger. The phase is signed on this run and nothing else.",
+      "cadence": "at the gate",
+      "steps": [ { "type": "command", "name": "tracker-check" }, { "type": "playtest" } ]
+    }
+  ]
+}

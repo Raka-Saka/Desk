@@ -1,0 +1,30 @@
+{
+  "_comment": "This project's adapter for the Desk. ${root} is this folder; ${<KEY>} is the environment variable KEY or the fallback under env. Commands are what the desk can run and record; shots are the project's own screenshot switches (optional); filter_command runs a filtered test (optional); design is the recipe/projection hook (optional). Delete what the project does not have.",
+  "project": "Project",
+  "python": "python",
+  "tracker": "Tools/desk/tracker/tracker.py",
+  "env": {},
+  "docs": {
+    "sheets": "docs/testing/manual-checks.md",
+    "roadmap": "docs/roadmap.md",
+    "guide": "docs/tracker/GUIDE.md"
+  },
+  "code": [
+    { "label": "source", "dir": "src", "ext": ["cpp", "h", "cs", "py", "ts", "rs", "gd"], "skip": ["node_modules", "target", "__pycache__"] }
+  ],
+  "tests": { "dir": "", "prefix": "", "logs": [] },
+  "media_sources": [
+    { "label": "screenshots", "path": "Saved/Screenshots", "depth": 2 },
+    { "label": "docs", "path": "docs/testing", "depth": 0 }
+  ],
+  "playtest_gate": [
+    ["played", "They played it without help"],
+    ["understood", "They understood what to do"],
+    ["came_back", "They wanted to keep going"]
+  ],
+  "builds": ["dev", "release"],
+  "commands": [
+    { "name": "tracker-check", "label": "Tracker check", "group": "checks", "minutes": 1, "description": "Items well-formed, backlog.md current.", "program": "python", "args": ["${root}/Tools/desk/tracker/tracker.py", "check"] },
+    { "name": "render", "label": "Render backlog", "group": "tools", "minutes": 1, "description": "Regenerate docs/backlog.md from the items.", "program": "python", "args": ["${root}/Tools/desk/tracker/tracker.py", "render"] }
+  ]
+}

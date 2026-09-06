@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "desk": {
+      "command": "cmd",
+      "args": ["/c", "desk.cmd", "mcp"],
+      "env": {}
+    }
+  }
+}

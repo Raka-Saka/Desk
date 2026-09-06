@@ -1,0 +1,9 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+*.log
+.vscode/
+.DS_Store
+Thumbs.db
+__pycache__/
