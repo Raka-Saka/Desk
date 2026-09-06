@@ -218,7 +218,7 @@ async function viewAction(kind: "go" | "shoot" | "both") {
       vp.last = rec; vlog(`filed ${rec.file}`);
       await reload();
     }
-  } catch (e) { vlog(String(e)); toast(String(e), 6000); }
+  } catch (e) { vlog(String(e)); toast(String(e), 8000); }
   vp.busy = ""; await refreshView();
 }
 
@@ -715,6 +715,19 @@ setInterval(async () => {
     if (state.view === "design" && !state.design.dirty) refreshDesign();
   }
 }, 4000);
+
+// The Viewfinder asks the game whether it answers, every few seconds while the panel is open.
+// A single check after Launch was the bug: the game takes twenty to sixty seconds to come up,
+// so the panel believed nothing was live and greyed every button out.
+setInterval(async () => {
+  const vp = state.viewp;
+  if (state.view !== "view" || !vp.v || !vp.v.enabled || vp.busy) return;
+  const v = await api.viewState().catch(() => null);
+  if (!v) return;
+  const changed = v.live !== vp.v.live || v.frames.length !== vp.v.frames.length;
+  vp.v = v;
+  if (changed && !document.activeElement?.matches("input, textarea")) render();
+}, 3000);
 
 api.onLine(({ run_id, line }) => {
   const c = state.console;

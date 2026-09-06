@@ -89,11 +89,11 @@ export function viewPanel(ws: Workspace, st: ViewPanelState): string {
     <section class="card">
       <div class="toolbar">
         <h2 style="margin:0">Game</h2>
-        <span class="dot ${v.live ? "ok" : ""}"></span> <span class="small">${v.live ? `remote console on :${v.port}` : "not running"}</span>
+        <span class="dot ${v.live ? "ok" : "pend"}"></span> <span class="small">${v.live ? `remote console answering on :${v.port}` : `nothing answers on :${v.port} yet — checked every 3 s`}</span>
         <span class="spacer"></span>
         ${v.live ? `<button data-action="view-quit">Quit game</button>` : `<button class="primary" data-action="view-launch"${st.busy ? " disabled" : ""}>▶ Launch with remote console</button>`}
       </div>
-      <p class="muted small">A windowed development run with the engine's Remote Control console on localhost. It takes about a minute to come up; the dot turns green when it answers.</p>
+      <p class="muted small">A windowed development run with the engine's Remote Control console on localhost. It takes twenty to sixty seconds to come up; the dot turns green when it answers. A game started any other way answers only if it was launched with <code>-EnablePlugins=RemoteControl -RCWebControlEnable</code> and the two security switches in desk.json. Every command below says so if nothing answers.</p>
       <h4>Frame</h4>
       <div class="grid2">
         <label>Name <input data-vf="name" value="${esc(f.name)}" placeholder="ore site at dawn"></label>
@@ -110,16 +110,16 @@ export function viewPanel(ws: Workspace, st: ViewPanelState): string {
         <label>Local hour <b>${hhmm(f.hour)}</b><input data-vf="hour" type="range" min="0" max="24" step="0.25" value="${f.hour}"></label>
       </div>
       <div class="toolbar">
-        <button class="primary" data-action="view-go"${v.live && !st.busy ? "" : " disabled"}>Go there</button>
-        <button class="primary" data-action="view-shoot"${v.live && !st.busy ? "" : " disabled"}>📷 Shoot</button>
-        <button data-action="view-go-shoot"${v.live && !st.busy ? "" : " disabled"}>Go there, then shoot</button>
+        <button class="primary" data-action="view-go"${st.busy ? " disabled" : ""}>Go there</button>
+        <button class="primary" data-action="view-shoot"${st.busy ? " disabled" : ""}>📷 Shoot</button>
+        <button data-action="view-go-shoot"${st.busy ? " disabled" : ""}>Go there, then shoot</button>
         <button data-action="view-save"${f.name.trim() ? "" : " disabled"}>Save frame</button>
         ${st.busy ? `<span class="spin"></span> <span class="small muted">${esc(st.busy)}</span>` : ""}
       </div>
       <p class="muted small">Go there sends <code>${esc(v.view_command)}</code>; Shoot sends <code>${esc(v.shoot_command)}</code> and files the PNG into this phase's media with the frame in its caption. Until the game has <code>Basin.ViewAt</code> (item 3.24), Go there is accepted and ignored: the picture is from wherever the player stands.</p>
       ${st.last ? `<h4>Last picture</h4><a class="media-card" data-open="${esc(st.last.file)}"><img class="thumb" src="${mediaUrl(ws.root, st.last.file)}" alt=""><div class="media-meta small">${esc(st.last.caption)}<br><span class="muted">${esc(st.last.file)}</span></div></a>` : ""}
       <h4>Console</h4>
-      <div class="toolbar"><input data-view-console value="${esc(st.console)}" placeholder="any console command, e.g. stat fps" size="40"${v.live ? "" : " disabled"}><button data-action="view-console"${v.live ? "" : " disabled"}>Send</button></div>
+      <div class="toolbar"><input data-view-console value="${esc(st.console)}" placeholder="any console command, e.g. stat fps" size="40"><button data-action="view-console">Send</button></div>
       ${st.log.length ? `<pre class="log small">${st.log.slice(-12).map(esc).join("\n")}</pre>` : ""}
     </section>
   </div>`;
