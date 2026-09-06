@@ -60,7 +60,7 @@ async function loadProjects() {
 }
 
 function renderNoProject() {
-  app.innerHTML = `<aside class="side"><div class="brand"><span>Desk</span></div><div class="side-foot muted small">no project open</div></aside><main class="main">${projects(state.projects, null)}</main>${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}`;
+  app.innerHTML = `<aside class="side"><div class="brand"><span class="brand-mark">D</span><span class="brand-name">Desk</span><small>workspace OS</small></div><div class="nav-label">Workspace</div><nav><a class="active"><span class="nav-icon">●</span><span><b>Projects</b><small>choose a workspace</small></span></a></nav><div class="side-foot"><div class="muted small">No project connected</div></div></aside><main class="main"><header class="topbar"><div class="breadcrumbs"><span class="muted">Desk</span><span>/</span><strong>Projects</strong></div></header><div class="page-content">${projects(state.projects, null)}</div></main>${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}`;
 }
 
 function toast(msg: string, ms = 2500) {
@@ -114,6 +114,7 @@ function render() {
     case "library": body = library(ws, state.library); break;
   }
   const live = state.qa.live && state.qa.live.status === "running" ? state.qa.live : null;
+  const focusItem = ws.items.filter((i) => ["now", "yours"].includes(i.status) && i.kind !== "epic").sort((a, b) => a.priority.localeCompare(b.priority) || cmpId(a.id, b.id))[0];
   app.innerHTML = `${HAS_TAURI ? "" : `<div class="preview-banner">${esc(READ_ONLY)}</div>`}
     <aside class="side">
       <div class="brand"><span class="brand-mark">D</span><span class="brand-name">${esc(ws.config.project ?? "Desk")}</span><small>workspace OS</small></div>
@@ -122,12 +123,12 @@ function render() {
       <nav>${NAV.filter(([v]) => (v !== "design" || ws.config.design) && (v !== "library" || ws.library.enabled)).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}"><span class="nav-icon">${["⌂","◈","⌁","!","✓","▧","◇","⌕","◷","⌘","☰","●"][NAV.findIndex(([n]) => n === v)]}</span><span><b>${l}${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</b><small>${d}</small></span></a>`).join("")}</nav>
       <div class="side-foot">
         ${live ? `<div class="live"><span class="spin"></span> ${esc(live.suite_name)} · ${live.steps.filter((s) => s.status !== "pending" && s.status !== "running").length + 1}/${live.steps.length}</div>` : ""}
-        <div class="system-line"><span class="status-dot good"></span><span>Workspace synced</span></div>
+        <div><span class="status-dot good"></span> <span>Workspace synced</span></div>
         <div class="muted small">${openCount} open · ${ws.dirty.length ? `${ws.dirty.length} dirty` : "clean"}</div>
-        <button data-action="reload" title="Re-read the repo">↻ Refresh workspace</button>
+        <button data-action="reload" title="Re-read the repo">Refresh workspace</button>
       </div>
     </aside>
-    <main class="main"><header class="topbar"><div class="breadcrumbs"><span class="muted">${esc(ws.config.project ?? "Project")}</span><span>/</span><strong>${esc(NAV.find(([v]) => v === state.view)?.[1] ?? "Workspace")}</strong></div><div class="top-actions"><button class="search-trigger" data-view="board">⌕ <span>Find anything</span><kbd>⌘ K</kbd></button><button class="primary" data-action="new-item">+ New item</button></div></header><div class="page-content">${body}</div></main>
+    <main class="main"><header class="topbar"><div class="breadcrumbs"><span class="muted">${esc(ws.config.project ?? "Project")}</span><span>/</span><strong>${esc(NAV.find(([v]) => v === state.view)?.[1] ?? "Workspace")}</strong></div><div class="top-actions"><button class="search-trigger" data-view="board">Find anything <kbd>⌘ K</kbd></button><button class="primary" data-action="new-item">+ New item</button></div></header><div class="page-content"><div class="focus-ribbon"><span class="eyebrow">Focus now</span><strong>${focusItem ? `${esc(focusItem.id)} · ${esc(focusItem.title)}` : "Your queue is clear"}</strong><span class="muted">${focusItem ? "next verifiable action" : "choose a workspace to continue"}</span><span class="spacer"></span><span>${ws.dirty.length ? `${ws.dirty.length} files need committing` : "working tree clean"}</span></div>${body}</div></main>
     ${state.drawer ? drawer(ws, state.drawer) : ""}
     ${state.logView !== null ? `<div class="modal" data-action="close-log"><pre class="log">${esc(state.logView)}</pre></div>` : ""}
     ${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}`;
