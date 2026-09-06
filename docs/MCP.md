@@ -50,6 +50,7 @@ Arguments are JSON objects; results are text (JSON pretty-printed) with `isError
 | `desk_library_source` | `slug` | one source in full, the claims citing it, the first 3,000 characters of its text |
 | `desk_library_claims` | `only_unsourced?`, `only_failing?`, `body?` | the claims index with principle, linked sources and checks |
 | `desk_library_search` | `query`, `per_source?` | metadata and full-text hits with snippets |
+| `desk_library_read` | `slug`, `query?`, `context?`, `offset?`, `chars?` | a source in its own words: a window of its text, or every match of a query with context -- quote from this, not from memory |
 | `desk_view_state` | — | the Viewfinder: faces, named places, saved frames, whether a game answers (needs `view` in desk.json) |
 
 ### Writing

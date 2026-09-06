@@ -5,7 +5,7 @@ import { dev, type ConsoleState } from "./dev";
 import { media, type MediaState } from "./media";
 import { isSuite, qa, type QaState } from "./qa";
 import { projects, type ProjectsState } from "./projects";
-import { library, type LibraryState } from "./library";
+import { citation, findAll, library, type LibraryState } from "./library";
 import { blankFrame, latLonFromPixel, viewPanel, type ViewPanelState } from "./view";
 import { board, bugs, currentPhase, dashboard, itemHeader, production, scope } from "./views";
 import { cmpId, esc, md, option, today } from "./util";
@@ -29,7 +29,7 @@ const state = {
   design: { draft: null, selected: "", report: null, loading: false, problems: null, places: [], dirty: false } as DesignState,
   drawer: null as { item: Item; editing: boolean; isNew: boolean } | null,
   projects: { known: [], home: null, creating: null, busy: "", error: "" } as ProjectsState,
-  library: { tab: "sources", domain: "all", query: "", hits: null, searching: false, open: null, proposing: false, onlyUnsourced: false } as LibraryState,
+  library: { tab: "sources", domain: "all", query: "", hits: null, searching: false, open: null, proposing: false, onlyUnsourced: false, reader: null } as LibraryState,
   noProject: false,
   palette: { open: false, q: "", sel: 0 },
   viewp: { v: null, frame: blankFrame(), busy: "", log: [], last: null, console: "" } as ViewPanelState,
@@ -222,6 +222,18 @@ async function viewAction(kind: "go" | "shoot" | "both") {
   vp.busy = ""; await refreshView();
 }
 
+function readerFind() {
+  const r = state.library.reader; if (!r) return;
+  const q = document.querySelector<HTMLInputElement>("[data-reader-q]")?.value ?? "";
+  r.q = q; r.hits = r.text ? findAll(r.text, q) : []; r.cur = 0;
+  render(); scrollToHit();
+  const inp = document.querySelector<HTMLInputElement>("[data-reader-q]"); if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
+
+function scrollToHit() {
+  setTimeout(() => document.getElementById("reader-cur")?.scrollIntoView({ block: "center" }), 0);
+}
+
 function paletteMatches(ws: Workspace): Item[] {
   const q = state.palette.q.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
@@ -251,6 +263,8 @@ document.addEventListener("keydown", (ev) => {
     render();
     return;
   }
+  if (state.library.reader && (ev.target as HTMLElement)?.matches?.("[data-reader-q]") && ev.key === "Enter") { ev.preventDefault(); readerFind(); return; }
+  if (state.library.reader && ev.key === "Escape" && !state.palette.open) { state.library.reader = null; render(); return; }
   if (!state.palette.open || !state.ws) return;
   if (ev.key === "Escape") { state.palette.open = false; render(); }
   else if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
@@ -535,6 +549,36 @@ app.addEventListener("click", async (ev) => {
     case "proj-forget": await api.projectsForget(t.dataset.path!).catch(() => {}); await loadProjects(); render(); break;
     // Library
     case "lib-tab": state.library.tab = t.dataset.tab!; render(); break;
+    // Reader
+    case "lib-read": {
+      const src = state.ws!.library.sources.find((x) => x.slug === t.dataset.slug);
+      if (!src) break;
+      state.library.reader = { slug: src.slug, tab: src.text ? "text" : "pdf", text: null, q: "", hits: [], cur: 0 };
+      render();
+      if (src.text) { state.library.reader.text = await api.readLog(src.text).catch((e) => `could not read the text cache: ${e}`); render(); }
+      break;
+    }
+    case "reader-close": state.library.reader = null; render(); break;
+    case "reader-tab": state.library.reader!.tab = t.dataset.tab as "text" | "pdf"; render(); break;
+    case "reader-find": readerFind(); break;
+    case "reader-next": case "reader-prev": {
+      const r = state.library.reader!; if (!r.hits.length) break;
+      r.cur = (r.cur + (t.dataset.action === "reader-next" ? 1 : r.hits.length - 1)) % r.hits.length; render(); scrollToHit(); break;
+    }
+    case "reader-goto": state.library.reader!.cur = Number(t.dataset.i); render(); scrollToHit(); break;
+    case "reader-shelf": {
+      const r = state.library.reader!; const q = (document.querySelector<HTMLInputElement>("[data-reader-q]")?.value ?? r.q).trim();
+      if (q.length < 2) { toast("type a word to search the shelf for"); break; }
+      state.library.reader = null; state.library.tab = "search"; state.library.query = q; state.library.searching = true; render();
+      state.library.hits = await api.librarySearch(q).catch(() => []); state.library.searching = false; render(); break;
+    }
+    case "reader-cite": {
+      const r = state.library.reader!; const src = state.ws!.library.sources.find((x) => x.slug === r.slug); if (!src) break;
+      const quote = (window.getSelection()?.toString() ?? "").replace(/\s+/g, " ").trim();
+      const text = citation(src, quote);
+      try { await navigator.clipboard.writeText(text); toast(`copied: ${text.slice(0, 90)}${text.length > 90 ? "…" : ""}`, 5000); } catch { prompt("copy this citation", text); }
+      break;
+    }
     case "lib-open": state.library.open = t.dataset.slug!; render(); break;
     case "lib-close": state.library.open = null; render(); break;
     case "lib-unsourced": state.library.onlyUnsourced = (t as HTMLInputElement).checked; render(); break;

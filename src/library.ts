@@ -3,6 +3,7 @@
 // across the text cache. Read from the project's own files; the desk adds only candidates.json.
 import type { LibCandidate, LibClaim, LibSource, Library, LibHit, Workspace } from "./api";
 import { badge, esc, option } from "./util";
+import { mediaUrl } from "./api";
 
 export interface LibraryState {
   tab: string; // sources | claims | candidates | search
@@ -13,6 +14,17 @@ export interface LibraryState {
   open: string | null; // source slug
   proposing: boolean;
   onlyUnsourced: boolean;
+  reader: ReaderState | null;
+}
+
+/** A source open in the reader: its text (from the text cache) or its PDF, with find-in-text. */
+export interface ReaderState {
+  slug: string;
+  tab: "text" | "pdf";
+  text: string | null; // null while loading
+  q: string;
+  hits: number[]; // character offsets of matches
+  cur: number; // index into hits
 }
 
 export function library(ws: Workspace, st: LibraryState): string {
@@ -29,7 +41,106 @@ export function library(ws: Workspace, st: LibraryState): string {
   return `${kpis(lib)}
   <div class="toolbar">${tabs.map(([t, l]) => `<button class="tab${st.tab === t ? " active" : ""}" data-action="lib-tab" data-tab="${t}">${l}</button>`).join("")}</div>
   <section class="card">${body}</section>
-  ${st.open ? detail(ws, lib, st.open) : ""}`;
+  ${st.open ? detail(ws, lib, st.open) : ""}
+  ${st.reader ? reader(ws, lib, st.reader) : ""}`;
+}
+
+// --- the reader ------------------------------------------------------------------------------------
+
+/** Every match of q in text, case-insensitive, as character offsets. */
+export function findAll(text: string, q: string): number[] {
+  const needle = q.trim().toLowerCase();
+  if (needle.length < 2) return [];
+  const hay = text.toLowerCase();
+  const out: number[] = [];
+  let at = hay.indexOf(needle);
+  while (at >= 0 && out.length < 2000) { out.push(at); at = hay.indexOf(needle, at + needle.length); }
+  return out;
+}
+
+/** The ledger's citation bracket for a source: [Surname et al., *Venue* Year — quote]. */
+export function citation(s: LibSource, quote: string): string {
+  const surname = (a: string) => a.trim().split(/\s+/).pop() ?? a;
+  const names = s.authors.filter((a) => !/^et al/i.test(a));
+  const who = names.length === 0 ? s.title : names.length === 1 ? surname(names[0]) : names.length === 2 ? `${surname(names[0])} & ${surname(names[1])}` : `${surname(names[0])} et al.`;
+  const venue = s.venue.split("(")[0].trim();
+  return `[${who}, *${venue}* ${s.year} — ${quote.trim() || s.title}]`;
+}
+
+function reader(ws: Workspace, lib: Library, r: ReaderState): string {
+  const s = lib.sources.find((x) => x.slug === r.slug);
+  if (!s) return "";
+  const n = r.hits.length;
+  let body = "";
+  if (r.tab === "pdf") {
+    body = s.pdf ? `<iframe class="reader-pdf" src="${mediaUrl(ws.root, s.pdf)}" title="${esc(s.title)}"></iframe>` : `<p class="muted">No PDF on disk for this source.</p>`;
+  } else if (r.text === null) {
+    body = `<p class="muted">Loading the text…</p>`;
+  } else if (!s.text) {
+    body = `<p class="muted">No text cache for this source; open the PDF tab, or run the project's text extraction.</p>`;
+  } else {
+    body = `<div class="reader-text">${renderText(r.text, r.q, r.hits, r.cur)}</div>`;
+  }
+  const hitList = n ? `<ol class="reader-hits">${r.hits.slice(0, 200).map((at, i) => `<li class="${i === r.cur ? "cur" : ""}" data-action="reader-goto" data-i="${i}">${esc(snippet(r.text ?? "", at, r.q.length))}</li>`).join("")}</ol>${n > 200 ? `<p class="muted small">first 200 of ${n}</p>` : ""}` : (r.q.trim().length >= 2 && r.text !== null ? `<p class="muted small">nothing found</p>` : "");
+  return `<div class="reader">
+    <div class="reader-head">
+      <div class="reader-title"><b>${esc(s.title)}</b><div class="muted small">${esc(s.authors.join(", "))} · ${esc(String(s.year ?? ""))}${s.venue ? ` · ${esc(s.venue)}` : ""}</div></div>
+      <div class="toolbar">
+        <button class="tab${r.tab === "text" ? " active" : ""}" data-action="reader-tab" data-tab="text">Text</button>
+        <button class="tab${r.tab === "pdf" ? " active" : ""}" data-action="reader-tab" data-tab="pdf">PDF</button>
+        <input data-reader-q value="${esc(r.q)}" placeholder="find in this paper (Enter)" size="28">
+        <button data-action="reader-find">Find</button>
+        <span class="small muted">${n ? `${r.cur + 1} / ${n}` : ""}</span>
+        <button class="small" data-action="reader-prev"${n ? "" : " disabled"}>↑</button>
+        <button class="small" data-action="reader-next"${n ? "" : " disabled"}>↓</button>
+        <button data-action="reader-shelf" title="the same words across every paper on the shelf">Search the shelf</button>
+        <button data-action="reader-cite" title="copy the ledger's citation bracket; a selection in the text becomes the quote">Copy citation</button>
+        <button data-action="reader-close" class="right">✕</button>
+      </div>
+    </div>
+    <div class="reader-body">
+      <aside class="reader-side">
+        ${s.settles ? `<h4>Settles</h4><p class="small">${esc(s.settles)}</p>` : ""}
+        ${s.supplies.length ? `<h4>Supplies</h4><ul class="small">${s.supplies.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""}
+        <h4>Matches ${n ? `(${n})` : ""}</h4>
+        ${hitList || `<p class="muted small">Type a word above. Matches list here; click one to jump.</p>`}
+      </aside>
+      <main class="reader-main">${body}</main>
+    </div>
+  </div>`;
+}
+
+function snippet(text: string, at: number, len: number): string {
+  const a = Math.max(0, at - 50), b = Math.min(text.length, at + len + 70);
+  return (a > 0 ? "…" : "") + text.slice(a, b).replace(/\s+/g, " ") + (b < text.length ? "…" : "");
+}
+
+/** Paragraphs with the matches marked; the current one carries an id for scrolling. */
+function renderText(text: string, q: string, hits: number[], cur: number): string {
+  const len = q.trim().length;
+  const marks = new Set(hits);
+  let out = "";
+  let i = 0;
+  const paras = text.split(/\n\s*\n/);
+  for (const p of paras) {
+    let html = "";
+    let j = 0;
+    const start = text.indexOf(p, i);
+    const base = start >= 0 ? start : i;
+    if (len >= 2 && hits.length) {
+      for (const at of hits) {
+        if (at < base || at >= base + p.length) continue;
+        const rel = at - base;
+        html += esc(p.slice(j, rel)) + `<mark${hits[cur] === at ? ' id="reader-cur" class="cur"' : ""}>${esc(p.slice(rel, rel + len))}</mark>`;
+        j = rel + len;
+      }
+    }
+    html += esc(p.slice(j));
+    out += `<p>${html.replace(/\n/g, " ")}</p>`;
+    i = base + p.length;
+    void marks;
+  }
+  return out;
 }
 
 function kpis(lib: Library): string {
@@ -61,7 +172,7 @@ function sources(lib: Library, st: LibraryState): string {
       <td class="small">${s.claims.length ? `${s.claims.length}` : "<span class='muted'>—</span>"}</td>
       <td class="small">${s.cited_in.length ? `${s.cited_in.length} file${s.cited_in.length > 1 ? "s" : ""}` : "<span class='warn'>nowhere</span>"}</td>
       <td class="small">${s.items.map((i) => `<span class="id">${esc(i)}</span>`).join(" ") || "<span class='muted'>—</span>"}</td>
-      <td>${s.pdf ? badge("st-done", "pdf") : badge("st-later", "no pdf")}${s.text ? badge("st-done", "text") : ""}${s.canonical ? badge("adr", "canonical") : ""}</td>
+      <td>${s.text || s.pdf ? `<button class="small" data-action="lib-read" data-slug="${esc(s.slug)}" title="read it here">📖</button> ` : ""}${s.pdf ? badge("st-done", "pdf") : badge("st-later", "no pdf")}${s.text ? badge("st-done", "text") : ""}${s.canonical ? badge("adr", "canonical") : ""}</td>
     </tr>`).join("")}
   </table>`;
 }
@@ -141,8 +252,8 @@ function detail(ws: Workspace, lib: Library, slug: string): string {
   return `<div class="drawer-back" data-action="lib-close"></div>
   <aside class="drawer">
     <div class="drawer-tools">
-      ${s.pdf ? `<button data-action="open-abs" data-path="${esc(s.pdf)}">Open PDF</button>` : `<span class="muted small">no PDF on disk</span>`}
-      ${s.text ? `<button data-action="open-abs" data-path="${esc(s.text)}">Open text</button>` : ""}
+      ${s.text || s.pdf ? `<button class="primary" data-action="lib-read" data-slug="${esc(s.slug)}">📖 Read</button>` : `<span class="muted small">no PDF or text on disk</span>`}
+      ${s.pdf ? `<button data-action="open-abs" data-path="${esc(s.pdf)}" title="in the system viewer">PDF outside</button>` : ""}
       <a class="file" data-open-url="${esc(s.url)}">source URL</a>
       <button data-action="lib-close" class="right">✕</button>
     </div>

@@ -50,6 +50,17 @@ best effort and the view says so.
   under `accepted`) and runs the fetch and render hooks.
 - **Search**: titles, authors, what a source settles, and the full text cache, with snippets.
 
+## The reader
+
+Every source with a text cache or a PDF opens inside the desk (📖 in the Sources table, or
+**Read** on the card). Two tabs: the extracted text, and the PDF in the web view's own viewer.
+Find-in-text lists every match on the left and marks them in the page; ↑ ↓ walk them. **Search
+the shelf** takes the same words to every paper on the shelf. **Copy citation** puts the
+ledger's bracket on the clipboard — `[Surname et al., *Venue* Year — quote]` — with whatever is
+selected in the text as the quote, so a claim can be sourced by reading and copying, not
+retyping. Over MCP, `desk_library_read` gives an agent the same thing: a window of the text, or
+the matches of a phrase with context, to quote from.
+
 ## The research action
 
 A theme comes in ("what limits crop yield in regolith"); a candidate list comes out. The agent
@@ -76,6 +87,7 @@ with `attested_by_user`. That is the same boundary the tracker draws around `YOU
 | `desk_library_source` | one source in full, with the first 3,000 characters of its text |
 | `desk_library_claims` | the claims, optionally only Settled-without-source or only failing checks |
 | `desk_library_search` | metadata and full-text search with snippets |
+| `desk_library_read` | a window of a source's text, or a phrase's matches with context, to quote from |
 | `desk_library_propose` | record a candidate (all three checks required) |
 | `desk_library_decide` | accept or reject; accept needs `attested_by_user` and the user's words |
 

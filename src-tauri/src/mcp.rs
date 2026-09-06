@@ -154,6 +154,36 @@ impl Server {
                 let body = s(a, "body");
                 Ok(serde_json::to_value(lib.claims.iter().filter(|c| (!only_unsourced || (c.section == "Settled" && !c.cites_source)) && (!only_failing || c.checks.iter().any(|k| !k.ok)) && (body.is_empty() || c.body == body)).collect::<Vec<_>>()).unwrap())
             }
+            "desk_library_read" => {
+                // A window of a source's text, or every match of a query with context: what an
+                // agent needs to quote a paper in the paper's own words rather than from memory.
+                let lib = library::load(&self.root);
+                let slug = s(a, "slug");
+                let src = lib.sources.iter().find(|x| x.slug == slug).ok_or_else(|| format!("no source {slug}"))?;
+                if src.text.is_empty() { return Err(format!("{slug} has no text cache; the PDF is {}", if src.pdf.is_empty() { "absent too" } else { "on disk" })); }
+                let text = std::fs::read_to_string(&src.text).map_err(|e| e.to_string())?;
+                let query = s(a, "query");
+                if !query.trim().is_empty() {
+                    let context = a.get("context").and_then(|x| x.as_u64()).unwrap_or(300) as usize;
+                    let needle = query.to_lowercase();
+                    let hay = text.to_lowercase();
+                    let mut hits = vec![];
+                    let mut from = 0;
+                    while let Some(pos) = hay[from..].find(&needle) {
+                        let at = from + pos;
+                        let start = text[..at].char_indices().rev().nth(context).map(|(i, _)| i).unwrap_or(0);
+                        let end = text[at..].char_indices().nth(needle.len() + context).map(|(i, _)| at + i).unwrap_or(text.len());
+                        hits.push(json!({"at": at, "text": text[start..end].replace(['\n', '\r'], " ")}));
+                        from = at + needle.len();
+                        if hits.len() >= 50 { break; }
+                    }
+                    return Ok(json!({"slug": slug, "title": src.title, "query": query, "matches": hits.len(), "hits": hits}));
+                }
+                let offset = a.get("offset").and_then(|x| x.as_u64()).unwrap_or(0) as usize;
+                let chars = a.get("chars").and_then(|x| x.as_u64()).unwrap_or(6000) as usize;
+                let window: String = text.chars().skip(offset).take(chars).collect();
+                Ok(json!({"slug": slug, "title": src.title, "offset": offset, "chars": window.chars().count(), "total_chars": text.chars().count(), "text": window}))
+            }
             "desk_library_search" => Ok(serde_json::to_value(library::search(&self.root, &s(a, "query"), a.get("per_source").and_then(|x| x.as_u64()).unwrap_or(3) as usize)).unwrap()),
             "desk_library_propose" => {
                 let mut c: library::Candidate = serde_json::from_value(a.clone()).map_err(|e| format!("bad candidate: {e}"))?;
@@ -519,6 +549,7 @@ fn tool_list() -> Vec<Value> {
         tool("desk_library_sources", "The library's shelf: every source with domain, year, what it settles, who cites it, which items read it, and whether its PDF and text are on disk.", json!({}), &[]),
         tool("desk_library_source", "One source in full, the claims citing it, and the first 3,000 characters of its text.", json!({"slug": str_("")}), &["slug"]),
         tool("desk_library_claims", "The claims index: claim, principle, section, linked sources, checks.", json!({"only_unsourced": {"type": "boolean", "description": "Settled claims that cite nothing"}, "only_failing": {"type": "boolean"}, "body": str_("filter by body name")}), &[]),
+        tool("desk_library_read", "Read a source in its own words: a window of its text (offset, chars), or every match of a query with context characters around it. Quote from this, not from memory.", json!({"slug": str_(""), "query": str_("optional: return matches with context instead of a window"), "context": {"type": "integer"}, "offset": {"type": "integer"}, "chars": {"type": "integer"}}), &["slug"]),
         tool("desk_library_search", "Search titles, authors, what sources settle, and the full text cache; returns snippets.", json!({"query": str_(""), "per_source": {"type": "integer"}}), &["query"]),
         tool("desk_library_propose", "The research action's output: propose a candidate source with why, recency, credentials and a contradictions pass (all required). It waits for a person to read and accept it.", json!({"title": str_(""), "url": str_(""), "authors": strs(""), "year": {"type": "integer"}, "venue": str_(""), "domain": str_(""), "why": str_("what it settles or supplies"), "recency": str_("what has been published since; still the reference?"), "credentials": str_("affiliation, prior work, venue -- and how verified"), "contradictions": str_("which shelf papers it agrees/disagrees with, and where"), "slug": str_("optional")}), &["title", "url", "why", "recency", "credentials", "contradictions"]),
         tool("desk_library_decide", "Accept (needs attested_by_user and the user's words in note) or reject a candidate. Accept appends to sources.json and runs the project's fetch and render hooks.", json!({"slug": str_(""), "accept": {"type": "boolean"}, "note": str_(""), "attested_by_user": {"type": "boolean"}}), &["slug", "accept"]),
