@@ -40,17 +40,17 @@ const state = {
 const app = document.getElementById("app")!;
 
 const NAV: [View, string, string][] = [
-  ["dashboard", "Dashboard", "where the game is, what to do next"],
-  ["board", "Board", "every item by status"],
-  ["scope", "Scope", "phase → epic → item"],
-  ["bugs", "Bugs", "bugs and defects, by severity"],
-  ["qa", "QA", "suites, sheets, playtests, tests"],
-  ["media", "Media", "screenshots and video, by phase"],
-  ["design", "Design", "recipes: cost, value, push to the project"],
-  ["library", "Library", "sources, claims, candidates, search"],
-  ["production", "Production", "phases, gates, decisions"],
-  ["dev", "Development", "run checks, builds; files and commits"],
-  ["guide", "Guide", "how this is managed"],
+  ["dashboard", "Overview", "what needs attention now"],
+  ["board", "Work board", "move work through the loop"],
+  ["scope", "Scope map", "phase → epic → item"],
+  ["bugs", "Defects", "triage what is broken"],
+  ["qa", "Quality", "prove the build"],
+  ["media", "Media inbox", "evidence and captures"],
+  ["design", "Recipes", "balance cost and value"],
+  ["library", "Research", "sources and claims"],
+  ["production", "Roadmap", "phases, gates, decisions"],
+  ["dev", "Workbench", "checks, builds, commits"],
+  ["guide", "Playbook", "how Desk is managed"],
   ["projects", "Projects", "open or create a project"],
 ];
 
@@ -116,16 +116,18 @@ function render() {
   const live = state.qa.live && state.qa.live.status === "running" ? state.qa.live : null;
   app.innerHTML = `${HAS_TAURI ? "" : `<div class="preview-banner">${esc(READ_ONLY)}</div>`}
     <aside class="side">
-      <div class="brand">${esc(ws.config.project ?? "")}<span>Desk</span></div>
-      <nav>${NAV.filter(([v]) => (v !== "design" || ws.config.design) && (v !== "library" || ws.library.enabled)).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}"><b>${l}${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</b><small>${d}</small></a>`).join("")}</nav>
+      <div class="brand"><span class="brand-mark">D</span><span class="brand-name">${esc(ws.config.project ?? "Desk")}</span><small>workspace OS</small></div>
+      <div class="project-chip"><span class="status-dot"></span><span>${esc(ph.name)}</span><span class="spacer"></span><code>${esc(ws.branch)}</code></div>
+      <div class="nav-label">Workspaces</div>
+      <nav>${NAV.filter(([v]) => (v !== "design" || ws.config.design) && (v !== "library" || ws.library.enabled)).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}"><span class="nav-icon">${["⌂","◈","⌁","!","✓","▧","◇","⌕","◷","⌘","☰","●"][NAV.findIndex(([n]) => n === v)]}</span><span><b>${l}${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</b><small>${d}</small></span></a>`).join("")}</nav>
       <div class="side-foot">
-        ${live ? `<div class="live"><span class="spin"></span> suite ${esc(live.suite_name)} · step ${live.steps.filter((s) => s.status !== "pending" && s.status !== "running").length + 1}/${live.steps.length}</div>` : ""}
-        <div class="muted small">${esc(ph.name)}</div>
-        <div class="muted small">${openCount} open items · ${esc(ws.head)}${ws.dirty.length ? ` · ${ws.dirty.length} dirty` : ""}</div>
-        <button data-action="reload" title="Re-read the repo">↻ reload</button>
+        ${live ? `<div class="live"><span class="spin"></span> ${esc(live.suite_name)} · ${live.steps.filter((s) => s.status !== "pending" && s.status !== "running").length + 1}/${live.steps.length}</div>` : ""}
+        <div class="system-line"><span class="status-dot good"></span><span>Workspace synced</span></div>
+        <div class="muted small">${openCount} open · ${ws.dirty.length ? `${ws.dirty.length} dirty` : "clean"}</div>
+        <button data-action="reload" title="Re-read the repo">↻ Refresh workspace</button>
       </div>
     </aside>
-    <main class="main">${body}</main>
+    <main class="main"><header class="topbar"><div class="breadcrumbs"><span class="muted">${esc(ws.config.project ?? "Project")}</span><span>/</span><strong>${esc(NAV.find(([v]) => v === state.view)?.[1] ?? "Workspace")}</strong></div><div class="top-actions"><button class="search-trigger" data-view="board">⌕ <span>Find anything</span><kbd>⌘ K</kbd></button><button class="primary" data-action="new-item">+ New item</button></div></header><div class="page-content">${body}</div></main>
     ${state.drawer ? drawer(ws, state.drawer) : ""}
     ${state.logView !== null ? `<div class="modal" data-action="close-log"><pre class="log">${esc(state.logView)}</pre></div>` : ""}
     ${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}`;
