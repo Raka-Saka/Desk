@@ -84,6 +84,17 @@ or to `env.KEY` below when the variable is unset. Relative paths are relative to
     "check": ["python", "Tools/science/system_map.py", "--check"],    // lines containing check_filter are the verdict
     "check_filter": "recipes:",
     "push_suite": "recipes"
+  },
+  "library": {                             // optional: the Library view and desk_library_* (see LIBRARY.md)
+    "sources": "docs/science/sources.json",
+    "papers": "docs/science/papers",
+    "text": "docs/science/.textcache",
+    "claims": "docs/claims.json",
+    "contradictions": "docs/science/contradictions.md",
+    "candidates": "docs/science/candidates.json",
+    "fetch": ["python", "Tools/science/fetch_papers.py"],
+    "render": ["python", "Tools/science/render_bibliography.py"],
+    "shared": []                           // other shelves: folders with sources.json, papers/, text/
   }
 }
 ```

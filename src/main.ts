@@ -5,12 +5,14 @@ import { dev, type ConsoleState } from "./dev";
 import { media, type MediaState } from "./media";
 import { isSuite, qa, type QaState } from "./qa";
 import { projects, type ProjectsState } from "./projects";
+import { library, type LibraryState } from "./library";
 import { board, bugs, currentPhase, dashboard, itemHeader, production, scope } from "./views";
 import { cmpId, esc, md, option, today } from "./util";
 import { mediaUrl } from "./api";
-import { invoke } from "@tauri-apps/api/core";
+import { invoke } from "./api";
+import { HAS_TAURI, READ_ONLY } from "./preview";
 
-type View = "dashboard" | "board" | "scope" | "bugs" | "qa" | "media" | "design" | "production" | "dev" | "guide" | "projects";
+type View = "dashboard" | "board" | "scope" | "bugs" | "qa" | "media" | "design" | "library" | "production" | "dev" | "guide" | "projects";
 
 function freshDraft(kind: "sheets" | "playtest"): QaRun {
   return { kind, date: today(), commit: "", build: "PIE", tester: "", results: {}, gate: {}, minutes: 30, notes: "" };
@@ -26,6 +28,7 @@ const state = {
   design: { draft: null, selected: "", report: null, loading: false, problems: null, places: [], dirty: false } as DesignState,
   drawer: null as { item: Item; editing: boolean; isNew: boolean } | null,
   projects: { known: [], home: null, creating: null, busy: "", error: "" } as ProjectsState,
+  library: { tab: "sources", domain: "all", query: "", hits: null, searching: false, open: null, proposing: false, onlyUnsourced: false } as LibraryState,
   noProject: false,
   commands: [] as CommandSpec[],
   console: null as ConsoleState | null,
@@ -44,6 +47,7 @@ const NAV: [View, string, string][] = [
   ["qa", "QA", "suites, sheets, playtests, tests"],
   ["media", "Media", "screenshots and video, by phase"],
   ["design", "Design", "recipes: cost, value, push to the project"],
+  ["library", "Library", "sources, claims, candidates, search"],
   ["production", "Production", "phases, gates, decisions"],
   ["dev", "Development", "run checks, builds; files and commits"],
   ["guide", "Guide", "how this is managed"],
@@ -107,12 +111,13 @@ function render() {
     case "dev": body = dev(ws, state.commands, state.console); break;
     case "guide": body = `<section class="card md guide">${md(state.guide)}</section>`; break;
     case "projects": body = projects(state.projects, ws.root); break;
+    case "library": body = library(ws, state.library); break;
   }
   const live = state.qa.live && state.qa.live.status === "running" ? state.qa.live : null;
-  app.innerHTML = `
+  app.innerHTML = `${HAS_TAURI ? "" : `<div class="preview-banner">${esc(READ_ONLY)}</div>`}
     <aside class="side">
       <div class="brand">${esc(ws.config.project ?? "")}<span>Desk</span></div>
-      <nav>${NAV.filter(([v]) => v !== "design" || ws.config.design).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}"><b>${l}${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</b><small>${d}</small></a>`).join("")}</nav>
+      <nav>${NAV.filter(([v]) => (v !== "design" || ws.config.design) && (v !== "library" || ws.library.enabled)).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}"><b>${l}${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</b><small>${d}</small></a>`).join("")}</nav>
       <div class="side-foot">
         ${live ? `<div class="live"><span class="spin"></span> suite ${esc(live.suite_name)} · step ${live.steps.filter((s) => s.status !== "pending" && s.status !== "running").length + 1}/${live.steps.length}</div>` : ""}
         <div class="muted small">${esc(ph.name)}</div>
@@ -401,8 +406,9 @@ async function runCommand(name: string) {
 // The Projects screen shares the same delegation, with or without a project loaded.
 app.addEventListener("click", async (ev) => {
   const target = ev.target as HTMLElement;
-  const t = target.closest<HTMLElement>("[data-view],[data-item],[data-open],[data-action]");
+  const t = target.closest<HTMLElement>("[data-view],[data-item],[data-open],[data-open-url],[data-action]");
   if (!t) return;
+  if (t.dataset.openUrl) { ev.preventDefault(); api.openUrl(t.dataset.openUrl).catch((e) => toast(String(e), 5000)); return; }
   // A click inside the lightbox must not close it.
   if (t.dataset.action === "media-close" && target.closest("[data-stop]")) return;
   if (t.dataset.view) {
@@ -435,6 +441,26 @@ app.addEventListener("click", async (ev) => {
       break;
     }
     case "proj-forget": await api.projectsForget(t.dataset.path!).catch(() => {}); await loadProjects(); render(); break;
+    // Library
+    case "lib-tab": state.library.tab = t.dataset.tab!; render(); break;
+    case "lib-open": state.library.open = t.dataset.slug!; render(); break;
+    case "lib-close": state.library.open = null; render(); break;
+    case "lib-unsourced": state.library.onlyUnsourced = (t as HTMLInputElement).checked; render(); break;
+    case "lib-propose": state.library.proposing = true; render(); break;
+    case "lib-propose-cancel": state.library.proposing = false; render(); break;
+    case "lib-search": {
+      const q = (document.querySelector('[data-lib="query"]') as HTMLInputElement)?.value ?? "";
+      state.library.query = q; state.library.searching = true; render();
+      state.library.hits = await api.librarySearch(q).catch(() => []);
+      state.library.searching = false; render(); break;
+    }
+    case "lib-decide": {
+      const accept = t.dataset.accept === "1";
+      const note = prompt(accept ? "You have read it. Why does it belong on the shelf?" : "Why not?") ?? "";
+      if (!note.trim()) break;
+      try { await api.libraryDecide(t.dataset.slug!, accept, note); await reload(); render(); toast(accept ? "accepted into sources.json" : "rejected"); } catch (e) { toast(String(e), 6000); }
+      break;
+    }
     case "new-item": newItem("task"); break;
     case "new-bug": newItem("bug"); break;
     case "drawer-close": state.drawer = null; render(); break;
@@ -530,6 +556,7 @@ app.addEventListener("change", (ev) => {
   if (t.dataset.action === "board-phase") { state.boardPhase = t.value; localStorage.setItem("boardPhase", t.value); render(); }
   if (t.dataset.action === "quick-status") quickStatus(t.value);
   if (t.dataset.action === "media-kind") { state.media.kind = t.value; render(); }
+  if (t.dataset.action === "lib-domain") { state.library.domain = t.value; render(); }
   if (t.dataset.action === "media-capture" && t.value) { runCommand(t.value); t.value = ""; }
 });
 
@@ -539,6 +566,14 @@ app.addEventListener("submit", (ev) => {
   if (f.id === "media-form") { ev.preventDefault(); fileCurrent(f); }
   if (f.id === "media-edit") { ev.preventDefault(); saveMediaEdit(f); }
   if (f.id === "recipe-form") { ev.preventDefault(); applyRecipeForm(f); }
+  if (f.id === "lib-propose-form") {
+    ev.preventDefault();
+    const fd = new FormData(f);
+    const g = (k: string) => String(fd.get(k) ?? "").trim();
+    api.libraryPropose({ title: g("title"), url: g("url"), authors: g("authors").split(",").map((x) => x.trim()).filter(Boolean), year: Number(g("year")) || undefined, venue: g("venue"), domain: g("domain"), why: g("why"), recency: g("recency"), credentials: g("credentials"), contradictions: g("contradictions"), proposed_by: "you" })
+      .then(async () => { state.library.proposing = false; await reload(); state.library.tab = "candidates"; render(); toast("proposed"); })
+      .catch((e) => toast(String(e), 8000));
+  }
   if (f.id === "proj-form") {
     ev.preventDefault();
     const fd = new FormData(f);

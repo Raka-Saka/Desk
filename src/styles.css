@@ -240,6 +240,7 @@ table.items.proj tr.sel td { background: var(--panel2); }
 /* misc */
 .modal { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; }
 pre.log { background: #0b0e12; border: 1px solid var(--line); border-radius: 8px; padding: 14px; width: 80vw; height: 80vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }
+.preview-banner { position: absolute; top: 0; left: 0; right: 0; z-index: 50; background: #b58900; color: #111; font-weight: 600; font-size: 12px; padding: 4px 12px; text-align: center; }
 .toast { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--accent); color: #111; padding: 8px 16px; border-radius: 6px; font-weight: 600; box-shadow: 0 4px 14px rgba(0,0,0,.4); }
 .fatal { padding: 40px; }
 

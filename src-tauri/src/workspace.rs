@@ -101,6 +101,7 @@ pub struct Workspace {
     /// desk.json as data, for the window (project name, gate boxes, builds, design hooks).
     pub config: Value,
     pub commands: Vec<crate::runner::CommandSpec>,
+    pub library: crate::library::Library,
 }
 
 /// Newest mtime and file count under the folders the desk shows. Cheap enough to poll.
@@ -426,6 +427,7 @@ pub fn load(root: &Path) -> Result<Workspace, String> {
         sessions: crate::sessions::list(root).into_iter().take(20).collect(),
         config: crate::config::as_value(root),
         commands: crate::runner::catalogue(root),
+        library: crate::library::load(root),
         stats,
         items,
         phases,

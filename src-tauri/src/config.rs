@@ -107,6 +107,27 @@ pub struct Design {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Library {
+    pub sources: String,
+    #[serde(default)]
+    pub papers: String,
+    #[serde(default)]
+    pub text: String,
+    #[serde(default)]
+    pub claims: String,
+    #[serde(default)]
+    pub contradictions: String,
+    #[serde(default)]
+    pub candidates: String,
+    #[serde(default)]
+    pub fetch: Vec<String>,
+    #[serde(default)]
+    pub render: Vec<String>,
+    #[serde(default)]
+    pub shared: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default = "default_project")]
     pub project: String,
@@ -136,6 +157,8 @@ pub struct Config {
     pub shots: Option<Shots>,
     #[serde(default)]
     pub design: Option<Design>,
+    #[serde(default)]
+    pub library: Option<Library>,
 }
 
 fn default_project() -> String { "Project".into() }

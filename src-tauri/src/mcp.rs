@@ -8,7 +8,7 @@ use crate::items::{self, Item};
 use crate::runner::{self, NoEvents};
 use crate::sessions::{self, Closure, SessionRecord};
 use crate::workspace::{self, git, qa_runs_dir, render_backlog};
-use crate::{design, media, suites};
+use crate::{design, library, media, suites};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
@@ -128,6 +128,47 @@ impl Server {
                 let recipes = a.get("recipes").cloned().ok_or("recipes (array) is required")?;
                 let problems = design::save_recipes(&self.root, recipes)?;
                 Ok(json!({"saved": "docs/design/recipes.json", "problems": problems}))
+            }
+            "desk_library_sources" => {
+                let lib = library::load(&self.root);
+                if !lib.enabled { return Err("this project has no library block in desk.json".into()); }
+                Ok(serde_json::to_value(lib.sources.iter().map(|s| json!({"slug": s.slug, "title": s.title, "authors": s.authors, "year": s.year, "domain": s.domain, "venue": s.venue, "url": s.url, "canonical": s.canonical, "settles": s.settles, "supplies": s.supplies, "origin": s.origin, "has_pdf": !s.pdf.is_empty(), "has_text": !s.text.is_empty(), "claims": s.claims.len(), "items": s.items, "cited_in": s.cited_in})).collect::<Vec<_>>()).unwrap())
+            }
+            "desk_library_source" => {
+                let lib = library::load(&self.root);
+                let slug = s(a, "slug");
+                let src = lib.sources.iter().find(|x| x.slug == slug).ok_or_else(|| format!("no source {slug}"))?;
+                let mut v = serde_json::to_value(src).unwrap();
+                if !src.text.is_empty() {
+                    if let Ok(t) = std::fs::read_to_string(&src.text) {
+                        v["text_excerpt"] = json!(t.chars().take(3000).collect::<String>());
+                    }
+                }
+                v["cited_by"] = json!(src.claims.iter().filter_map(|i| lib.claims.get(*i)).map(|c| json!({"body": c.body, "section": c.section, "claim": c.claim, "file": c.file, "line": c.line, "checks": c.checks})).collect::<Vec<_>>());
+                Ok(v)
+            }
+            "desk_library_claims" => {
+                let lib = library::load(&self.root);
+                let only_unsourced = a.get("only_unsourced").and_then(|x| x.as_bool()).unwrap_or(false);
+                let only_failing = a.get("only_failing").and_then(|x| x.as_bool()).unwrap_or(false);
+                let body = s(a, "body");
+                Ok(serde_json::to_value(lib.claims.iter().filter(|c| (!only_unsourced || (c.section == "Settled" && !c.cites_source)) && (!only_failing || c.checks.iter().any(|k| !k.ok)) && (body.is_empty() || c.body == body)).collect::<Vec<_>>()).unwrap())
+            }
+            "desk_library_search" => Ok(serde_json::to_value(library::search(&self.root, &s(a, "query"), a.get("per_source").and_then(|x| x.as_u64()).unwrap_or(3) as usize)).unwrap()),
+            "desk_library_propose" => {
+                let mut c: library::Candidate = serde_json::from_value(a.clone()).map_err(|e| format!("bad candidate: {e}"))?;
+                if c.proposed_by.is_empty() { c.proposed_by = self.session.as_ref().map(|x| x.agent.clone()).unwrap_or_else(|| "an agent".into()); }
+                let saved = library::propose(&self.root, c)?;
+                if let Some(sess) = &mut self.session { sess.left_for_user.push(format!("read and decide the candidate source {}", saved.slug)); }
+                self.save_session();
+                Ok(serde_json::to_value(saved).unwrap())
+            }
+            "desk_library_decide" => {
+                let accept = a.get("accept").and_then(|x| x.as_bool()).unwrap_or(false);
+                if accept && !a.get("attested_by_user").and_then(|x| x.as_bool()).unwrap_or(false) {
+                    return Err("a source gets onto the shelf by being read: accept only with attested_by_user=true and the user's words in `note`".into());
+                }
+                Ok(serde_json::to_value(library::decide(&self.root, &s(a, "slug"), accept, &s(a, "note"))?).unwrap())
             }
             "desk_start_session" => {
                 let rec = sessions::start(&self.root, &s(a, "agent"), &s(a, "purpose"), &s(a, "compartment"))?;
@@ -441,6 +482,12 @@ fn tool_list() -> Vec<Value> {
         tool("desk_record_qa", "Record a manual sheets run or a playtest, or complete a pending manual step of a suite run.", json!({"kind": str_("sheets|playtest"), "results": {"type": "object", "description": "sheet row id -> PASS|FAIL|SKIP"}, "gate": {"type": "object", "description": "playtest boxes -> true|false"}, "notes": str_(""), "tester": str_(""), "build": str_(""), "minutes": {"type": "number"}, "suite_run_id": str_("to complete a suite's manual step"), "step_index": {"type": "integer"}}), &[]),
         tool("desk_design_report", "The recipe simulator's projection at the spawn, the best farmland and any extra places, for the recipes on disk or a draft.", json!({"draft": {"type": "object", "description": "{recipes: [...]} to project instead of docs/design/recipes.json"}, "places": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}, "description": "[[lat, lon], ...]"}}), &[]),
         tool("desk_save_recipes", "Write docs/design/recipes.json (the one home) and return system_map's problems, if any. Push to the game with desk_run_suite recipes.", json!({"recipes": {"type": "array", "description": "the full recipes array"}}), &["recipes"]),
+        tool("desk_library_sources", "The library's shelf: every source with domain, year, what it settles, who cites it, which items read it, and whether its PDF and text are on disk.", json!({}), &[]),
+        tool("desk_library_source", "One source in full, the claims citing it, and the first 3,000 characters of its text.", json!({"slug": str_("")}), &["slug"]),
+        tool("desk_library_claims", "The claims index: claim, principle, section, linked sources, checks.", json!({"only_unsourced": {"type": "boolean", "description": "Settled claims that cite nothing"}, "only_failing": {"type": "boolean"}, "body": str_("filter by body name")}), &[]),
+        tool("desk_library_search", "Search titles, authors, what sources settle, and the full text cache; returns snippets.", json!({"query": str_(""), "per_source": {"type": "integer"}}), &["query"]),
+        tool("desk_library_propose", "The research action's output: propose a candidate source with why, recency, credentials and a contradictions pass (all required). It waits for a person to read and accept it.", json!({"title": str_(""), "url": str_(""), "authors": strs(""), "year": {"type": "integer"}, "venue": str_(""), "domain": str_(""), "why": str_("what it settles or supplies"), "recency": str_("what has been published since; still the reference?"), "credentials": str_("affiliation, prior work, venue -- and how verified"), "contradictions": str_("which shelf papers it agrees/disagrees with, and where"), "slug": str_("optional")}), &["title", "url", "why", "recency", "credentials", "contradictions"]),
+        tool("desk_library_decide", "Accept (needs attested_by_user and the user's words in note) or reject a candidate. Accept appends to sources.json and runs the project's fetch and render hooks.", json!({"slug": str_(""), "accept": {"type": "boolean"}, "note": str_(""), "attested_by_user": {"type": "boolean"}}), &["slug", "accept"]),
         tool("desk_start_session", "Open a session record (docs/tracker/sessions). Do this first.", json!({"agent": str_("who: e.g. 'Claude Fable 5.1 / crafting'"), "purpose": str_("one sentence"), "compartment": str_("assets|logic|research|docs|qa|tooling|design|science")}), &["agent", "purpose"]),
         tool("desk_end_session", "Close the session with a summary and what was left for the user.", json!({"summary": str_(""), "left_for_user": strs("things only the user can do")}), &["summary"]),
         tool("desk_list_sessions", "Recent session records, newest first.", json!({"limit": {"type": "integer"}}), &[]),

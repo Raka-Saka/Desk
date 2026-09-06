@@ -119,6 +119,14 @@ Sheets run or playtest, same folder: `kind: "sheets" | "playtest"`, `date`, `com
 
 Kinds: `screenshot` `render` `video` `photo` `diagram`. Files live under `docs/media/phase-<n>/`.
 
+## Library candidates — the `library.candidates` file
+
+`{"candidates": [{slug, title, authors, year, venue, url, domain, why, recency, credentials, contradictions,
+proposed_by, proposed_at, status, decision_note, decided_at}]}` with `status` one of `proposed`,
+`accepted`, `rejected`. Written only by the desk. An accepted candidate is also appended to the
+project's `sources.json` with the decision under `accepted`. See [LIBRARY.md](LIBRARY.md) for the
+rest of the library's files, which belong to the project.
+
 ## Sessions — `docs/tracker/sessions/<stamp>_<agent>.json`
 
 See MCP.md. `closures[].class` is `stamped`, `machine` or `user`.

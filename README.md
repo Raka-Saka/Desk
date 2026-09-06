@@ -14,6 +14,7 @@ can have the same discipline. Everything project-specific is one file in the pro
 - [docs/LINKING.md](docs/LINKING.md) — how a project is linked: `init`, every field of `desk.json`, what the desk expects.
 - [docs/MCP.md](docs/MCP.md) — the MCP server: the shape of a session, every tool, classified closures, the records.
 - [docs/FORMATS.md](docs/FORMATS.md) — items, phases, suites, sheets, runs, media, sessions.
+- [docs/LIBRARY.md](docs/LIBRARY.md) — the library: sources, claims, candidates, the research action, shared shelves.
 
 ## Give a project a desk
 
@@ -46,6 +47,17 @@ up to `desk.json` from the working directory or the executable; `DESK_ROOT` over
 
 The Rust item writer and `tracker/tracker.py` produce byte-identical files; a test proves it
 against whatever project the desk is sitting in.
+
+## Preview without the host
+
+The page needs its Rust host for data. In a plain browser, or in a design tool's preview (v0 and
+the like), there is no Tauri bridge, so the desk renders `public/snapshot.json` read-only and says
+so in a banner. Write a snapshot from inside a project:
+
+    desk-snapshot                 # -> Tools/desk/public/snapshot.json (or pass a path)
+
+then `pnpm dev` and open it in a browser, or push the repo and let the design tool build it. Runs
+and saves are refused in preview mode; the snapshot is the one committed here.
 
 ## What it writes, and where
 

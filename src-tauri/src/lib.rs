@@ -5,6 +5,7 @@ pub mod config;
 pub mod design;
 pub mod frontmatter;
 pub mod items;
+pub mod library;
 pub mod mcp;
 pub mod media;
 pub mod projects;
@@ -39,6 +40,32 @@ fn load_workspace(root: State<Root>) -> Result<workspace::Workspace, String> {
     let ws = workspace::load(&root.0)?;
     let _ = projects::remember(&root.0);
     Ok(ws)
+}
+
+// --- library -----------------------------------------------------------------------------------
+
+#[tauri::command]
+fn library_search(root: State<Root>, query: String) -> Vec<library::Hit> {
+    library::search(&root.0, &query, 3)
+}
+
+#[tauri::command]
+fn library_propose(root: State<Root>, candidate: library::Candidate) -> Result<library::Candidate, String> {
+    library::propose(&root.0, candidate)
+}
+
+#[tauri::command]
+fn library_decide(root: State<Root>, slug: String, accept: bool, note: String) -> Result<library::Candidate, String> {
+    library::decide(&root.0, &slug, accept, &note)
+}
+
+#[tauri::command]
+fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err("only http(s) urls".into());
+    }
+    use tauri_plugin_opener::OpenerExt;
+    app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
 // --- projects ----------------------------------------------------------------------------------
@@ -301,6 +328,10 @@ pub fn run() {
             projects_pick_folder,
             projects_create,
             projects_open,
+            library_search,
+            library_propose,
+            library_decide,
+            open_url,
             save_item,
             next_id,
             read_text,

@@ -22,6 +22,10 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "desk-mcp"
 path = "src/bin/desk-mcp.rs"
 
+[[bin]]
+name = "desk-snapshot"
+path = "src/bin/desk-snapshot.rs"
+
 # custom-protocol is what makes the app serve its embedded pages instead of the Vite dev server.
 # `cargo tauri build` turns it on; a plain `cargo build --release` did not, and the window then
 # showed ERR_CONNECTION_REFUSED for localhost:1420. Default it, so every build path is a real app.

@@ -1,6 +1,12 @@
 // Typed wrappers over the Rust commands. Shapes mirror src-tauri/src/{items,workspace,runner}.rs.
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { convertFileSrc as tauriFileSrc, invoke as tauriInvoke } from "@tauri-apps/api/core";
+import { listen as tauriListen, type UnlistenFn } from "@tauri-apps/api/event";
+import { HAS_TAURI, previewInvoke } from "./preview";
+
+// Without the host (a browser, a design tool's preview) every call goes to the snapshot.
+export const invoke: <T>(cmd: string, args?: Record<string, unknown>) => Promise<T> = HAS_TAURI ? tauriInvoke : previewInvoke;
+const listen: typeof tauriListen = HAS_TAURI ? tauriListen : (async () => (() => {}) as UnlistenFn) as unknown as typeof tauriListen;
+const convertFileSrc = HAS_TAURI ? tauriFileSrc : (abs: string) => abs;
 
 export interface Item {
   id: string;
@@ -91,6 +97,7 @@ export interface Workspace {
   sessions: SessionRecord[];
   config: DeskConfig;
   commands: CommandSpec[];
+  library: Library;
   stats: CodeStats;
   roadmap_phase_line: string;
   problems: string[];
@@ -112,6 +119,12 @@ export const STATUS_HELP: Record<string, string> = {
 };
 
 export interface KnownProject { path: string; name: string; last_opened: string; exists: boolean }
+export interface LibSource { slug: string; domain: string; year: unknown; authors: string[]; title: string; venue: string; url: string; licence: string; canonical: boolean; settles: string; supplies: string[]; target: string; extra: Record<string, unknown>; origin: string; pdf: string; text: string; claims: number[]; items: string[]; cited_in: string[] }
+export interface LibCheck { kind: string; ok: boolean; note: string }
+export interface LibClaim { body: string; file: string; line: number; section: string; claim: string; principle: string; cites_source: boolean; checks: LibCheck[]; text: string; sources: string[] }
+export interface LibCandidate { slug: string; title: string; authors: string[]; year: unknown; venue: string; url: string; domain: string; why: string; recency: string; credentials: string; contradictions: string; proposed_by: string; proposed_at: string; status: string; decision_note: string; decided_at: string }
+export interface Library { enabled: boolean; sources: LibSource[]; claims: LibClaim[]; candidates: LibCandidate[]; domains: string[]; contradictions: string[]; shelves: string[] }
+export interface LibHit { slug: string; title: string; where_: string; snippet: string }
 
 export const api = {
   load: () => invoke<Workspace>("load_workspace"),
@@ -121,6 +134,10 @@ export const api = {
   projectsPickFolder: () => invoke<string | null>("projects_pick_folder"),
   projectsCreate: (parent: string, folder: string, name: string) => invoke<string>("projects_create", { parent, folder, name }),
   projectsOpen: (path: string) => invoke<void>("projects_open", { path }),
+  librarySearch: (query: string) => invoke<LibHit[]>("library_search", { query }),
+  libraryPropose: (candidate: Partial<LibCandidate>) => invoke<LibCandidate>("library_propose", { candidate }),
+  libraryDecide: (slug: string, accept: boolean, note: string) => invoke<LibCandidate>("library_decide", { slug, accept, note }),
+  openUrl: (url: string) => invoke<void>("open_url", { url }),
   saveItem: (item: Item) => invoke<Item>("save_item", { item }),
   nextId: (prefix: string) => invoke<string>("next_id", { prefix }),
   readText: (rel: string) => invoke<string>("read_text", { rel }),

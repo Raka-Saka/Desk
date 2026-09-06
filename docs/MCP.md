@@ -46,6 +46,10 @@ Arguments are JSON objects; results are text (JSON pretty-printed) with `isError
 | `desk_get_run` | `id` | a suite run (step statuses) or a command run record |
 | `desk_list_sessions` | `limit?` | recent session records |
 | `desk_design_report` | `draft?` (`{recipes:[...]}`), `places?` (`[[lat,lon],...]`) | the project's projection report (needs `design` in desk.json) |
+| `desk_library_sources` | — | the shelf: every source with what it settles, who cites it, where it is named, file presence (needs `library` in desk.json) |
+| `desk_library_source` | `slug` | one source in full, the claims citing it, the first 3,000 characters of its text |
+| `desk_library_claims` | `only_unsourced?`, `only_failing?`, `body?` | the claims index with principle, linked sources and checks |
+| `desk_library_search` | `query`, `per_source?` | metadata and full-text hits with snippets |
 
 ### Writing
 
@@ -58,6 +62,8 @@ Arguments are JSON objects; results are text (JSON pretty-printed) with `isError
 | `desk_file_media` | `source`, `phase`, `caption`, `item?`, `run?`, `kind?`, `tags?` | copies into `docs/media/phase-<n>/`, records it |
 | `desk_record_qa` | `kind` (`sheets`/`playtest`), `results?`, `gate?`, `notes?`, `tester?`, `build?`, `minutes?` — or `suite_run_id` + `step_index` to complete a suite's manual step | a QA run record |
 | `desk_save_recipes` | `recipes` (array) | writes the recipes file and returns the project check's verdict |
+| `desk_library_propose` | `title`, `url`, `why`, `recency`, `credentials`, `contradictions`, `authors?`, `year?`, `venue?`, `domain?`, `slug?` | records a candidate source (all three checks required); adds "read and decide" to the session's left_for_user |
+| `desk_library_decide` | `slug`, `accept`, `note?`, `attested_by_user?` | rejects, or accepts into sources.json and runs the fetch and render hooks; accept needs `attested_by_user` with the user's words in `note` |
 
 ### Running
 
