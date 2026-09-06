@@ -9,6 +9,12 @@ It grew inside [Basin](https://github.com/Raka-Saka/rezo) and was split out so a
 can have the same discipline. Everything project-specific is one file in the project:
 `desk.json`.
 
+## Documentation
+
+- [docs/LINKING.md](docs/LINKING.md) — how a project is linked: `init`, every field of `desk.json`, what the desk expects.
+- [docs/MCP.md](docs/MCP.md) — the MCP server: the shape of a session, every tool, classified closures, the records.
+- [docs/FORMATS.md](docs/FORMATS.md) — items, phases, suites, sheets, runs, media, sessions.
+
 ## Give a project a desk
 
     python <desk>/tracker/tracker.py init --project "Name" --dir <project root>

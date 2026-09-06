@@ -4,12 +4,13 @@ import { design, recipesOf, type DesignState } from "./design";
 import { dev, type ConsoleState } from "./dev";
 import { media, type MediaState } from "./media";
 import { isSuite, qa, type QaState } from "./qa";
+import { projects, type ProjectsState } from "./projects";
 import { board, bugs, currentPhase, dashboard, itemHeader, production, scope } from "./views";
 import { cmpId, esc, md, option, today } from "./util";
 import { mediaUrl } from "./api";
 import { invoke } from "@tauri-apps/api/core";
 
-type View = "dashboard" | "board" | "scope" | "bugs" | "qa" | "media" | "design" | "production" | "dev" | "guide";
+type View = "dashboard" | "board" | "scope" | "bugs" | "qa" | "media" | "design" | "production" | "dev" | "guide" | "projects";
 
 function freshDraft(kind: "sheets" | "playtest"): QaRun {
   return { kind, date: today(), commit: "", build: "PIE", tester: "", results: {}, gate: {}, minutes: 30, notes: "" };
@@ -24,6 +25,8 @@ const state = {
   media: { phase: "all", kind: "all", filing: null, open: null, editing: false } as MediaState,
   design: { draft: null, selected: "", report: null, loading: false, problems: null, places: [], dirty: false } as DesignState,
   drawer: null as { item: Item; editing: boolean; isNew: boolean } | null,
+  projects: { known: [], home: null, creating: null, busy: "", error: "" } as ProjectsState,
+  noProject: false,
   commands: [] as CommandSpec[],
   console: null as ConsoleState | null,
   guide: "",
@@ -44,7 +47,17 @@ const NAV: [View, string, string][] = [
   ["production", "Production", "phases, gates, decisions"],
   ["dev", "Development", "run checks, builds; files and commits"],
   ["guide", "Guide", "how this is managed"],
+  ["projects", "Projects", "open or create a project"],
 ];
+
+async function loadProjects() {
+  state.projects.known = await api.projectsRecent().catch(() => []);
+  state.projects.home = await api.projectsHome().catch(() => null);
+}
+
+function renderNoProject() {
+  app.innerHTML = `<aside class="side"><div class="brand"><span>Desk</span></div><div class="side-foot muted small">no project open</div></aside><main class="main">${projects(state.projects, null)}</main>${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}`;
+}
 
 function toast(msg: string, ms = 2500) {
   state.toast = msg;
@@ -63,13 +76,20 @@ async function reload() {
     if (!state.commands.length) state.commands = await api.commands();
     if (!state.guide) state.guide = await api.readText(state.ws.config.docs?.guide || "docs/tracker/GUIDE.md").catch(() => "No guide: set docs.guide in desk.json.");
   } catch (e) {
-    app.innerHTML = `<div class="fatal"><h1>Basin Desk could not load the project</h1><pre>${esc(String(e))}</pre><p>Run it from inside the repo, or set <code>BASIN_ROOT</code> to the folder holding Basin.uproject.</p></div>`;
+    if (String(e).includes("NO_PROJECT")) {
+      state.noProject = true;
+      await loadProjects();
+      renderNoProject();
+      return;
+    }
+    app.innerHTML = `<div class="fatal"><h1>The desk could not load this project</h1><pre>${esc(String(e))}</pre><p>Run it from inside a folder with a <code>desk.json</code>, or set <code>DESK_ROOT</code>.</p></div>`;
     return;
   }
   render();
 }
 
 function render() {
+  if (state.noProject) { renderNoProject(); return; }
   const ws = state.ws;
   if (!ws) return;
   const ph = currentPhase(ws);
@@ -86,6 +106,7 @@ function render() {
     case "production": body = production(ws); break;
     case "dev": body = dev(ws, state.commands, state.console); break;
     case "guide": body = `<section class="card md guide">${md(state.guide)}</section>`; break;
+    case "projects": body = projects(state.projects, ws.root); break;
   }
   const live = state.qa.live && state.qa.live.status === "running" ? state.qa.live : null;
   app.innerHTML = `
@@ -377,6 +398,7 @@ async function runCommand(name: string) {
 
 // --- Events -----------------------------------------------------------------------------------------------
 
+// The Projects screen shares the same delegation, with or without a project loaded.
 app.addEventListener("click", async (ev) => {
   const target = ev.target as HTMLElement;
   const t = target.closest<HTMLElement>("[data-view],[data-item],[data-open],[data-action]");
@@ -386,13 +408,33 @@ app.addEventListener("click", async (ev) => {
   if (t.dataset.view) {
     state.view = t.dataset.view as View; localStorage.setItem("view", state.view); render();
     if (state.view === "design" && !state.design.report) refreshDesign();
+    if (state.view === "projects") { await loadProjects(); render(); }
     return;
   }
   if (t.dataset.open) { ev.preventDefault(); api.open(t.dataset.open).catch((e) => toast(String(e), 5000)); return; }
   if (t.dataset.item && !t.dataset.action) { openItem(t.dataset.item); return; }
-  const ws = state.ws!;
+  const ws = state.ws ?? ({ items: [], sheets: [], qa_runs: [], media: [], config: {} } as unknown as Workspace);
   switch (t.dataset.action) {
     case "reload": await reload(); toast("reloaded"); break;
+    // Projects
+    case "proj-new": state.projects.creating = { parent: "", folder: "", name: "" }; state.projects.error = ""; render(); break;
+    case "proj-cancel": state.projects.creating = null; render(); break;
+    case "proj-parent": {
+      const p = await api.projectsPickFolder().catch(() => null);
+      if (p && state.projects.creating) { state.projects.creating.parent = p; render(); }
+      break;
+    }
+    case "proj-pick": {
+      const p = await api.projectsPickFolder().catch(() => null);
+      if (!p) break;
+      try { await api.projectsOpen(p); toast("opening " + p); } catch (e) { state.projects.error = String(e); render(); }
+      break;
+    }
+    case "proj-open": {
+      try { await api.projectsOpen(t.dataset.path!); toast("opening " + t.dataset.path); } catch (e) { state.projects.error = String(e); render(); }
+      break;
+    }
+    case "proj-forget": await api.projectsForget(t.dataset.path!).catch(() => {}); await loadProjects(); render(); break;
     case "new-item": newItem("task"); break;
     case "new-bug": newItem("bug"); break;
     case "drawer-close": state.drawer = null; render(); break;
@@ -407,6 +449,7 @@ app.addEventListener("click", async (ev) => {
     case "qa-open": state.qa.openRun = state.qa.openRun === t.dataset.run ? null : t.dataset.run!; render(); break;
     case "qa-attach": { const inbox = await api.mediaInbox(); if (!inbox.length) { toast("Inbox is empty. Capture a shot first."); break; } startFiling(inbox.map((f) => f.path), { run: t.dataset.run! }); break; }
     case "sheet-res": readQaInputs(); state.qa.draft.results[t.dataset.row!] = t.dataset.val!; render(); break;
+    // (the projects cases above run with or without a workspace)
     case "sheet-all": {
       readQaInputs();
       const s = ws.sheets.find((x) => x.id === t.dataset.sheet);
@@ -496,6 +539,16 @@ app.addEventListener("submit", (ev) => {
   if (f.id === "media-form") { ev.preventDefault(); fileCurrent(f); }
   if (f.id === "media-edit") { ev.preventDefault(); saveMediaEdit(f); }
   if (f.id === "recipe-form") { ev.preventDefault(); applyRecipeForm(f); }
+  if (f.id === "proj-form") {
+    ev.preventDefault();
+    const fd = new FormData(f);
+    const parent = String(fd.get("parent") ?? "").trim(), folder = String(fd.get("folder") ?? "").trim(), name = String(fd.get("name") ?? "").trim();
+    state.projects.creating = { parent, folder, name };
+    state.projects.busy = `creating ${name}…`; state.projects.error = ""; render();
+    api.projectsCreate(parent, folder, name)
+      .then(async (path) => { state.projects.busy = "opening…"; render(); await api.projectsOpen(path); })
+      .catch((e) => { state.projects.busy = ""; state.projects.error = String(e); render(); });
+  }
 });
 
 // The desk holds no state of its own, so when another writer (a Claude session, the game, the

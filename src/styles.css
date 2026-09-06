@@ -232,6 +232,11 @@ table.items.proj tr.breakdown td { border-bottom: 1px solid var(--line); padding
 table.items.proj tr.hidden-row { display: none; }
 table.items.proj tr.sel td { background: var(--panel2); }
 
+/* projects */
+.projects { max-width: 1000px; }
+.projects h1 { font-size: 24px; }
+.projects .card { margin: 12px 0 18px; }
+
 /* misc */
 .modal { position: absolute; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; }
 pre.log { background: #0b0e12; border: 1px solid var(--line); border-radius: 8px; padding: 14px; width: 80vw; height: 80vh; overflow: auto; font-size: 12px; white-space: pre-wrap; }

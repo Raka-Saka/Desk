@@ -7,6 +7,7 @@ pub mod frontmatter;
 pub mod items;
 pub mod mcp;
 pub mod media;
+pub mod projects;
 pub mod runner;
 pub mod sessions;
 pub mod suites;
@@ -32,7 +33,52 @@ fn inside(root: &Path, rel: &str) -> Result<PathBuf, String> {
 
 #[tauri::command]
 fn load_workspace(root: State<Root>) -> Result<workspace::Workspace, String> {
-    workspace::load(&root.0)
+    if root.0.as_os_str().is_empty() {
+        return Err("NO_PROJECT".into());
+    }
+    let ws = workspace::load(&root.0)?;
+    let _ = projects::remember(&root.0);
+    Ok(ws)
+}
+
+// --- projects ----------------------------------------------------------------------------------
+
+#[tauri::command]
+fn projects_recent() -> Vec<projects::Known> {
+    projects::list()
+}
+
+#[tauri::command]
+fn projects_forget(path: String) -> Result<(), String> {
+    projects::forget(&path)
+}
+
+#[tauri::command]
+fn projects_home() -> Option<String> {
+    projects::desk_home().map(|p| p.to_string_lossy().to_string())
+}
+
+/// Native folder picker, async so the blocking dialog never sits on the main thread.
+#[tauri::command]
+async fn projects_pick_folder(app: AppHandle) -> Option<String> {
+    use tauri_plugin_dialog::DialogExt;
+    app.dialog().file().blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+fn projects_create(parent: String, folder: String, name: String) -> Result<String, String> {
+    projects::create(&parent, &folder, &name).map(|p| p.to_string_lossy().to_string())
+}
+
+/// Relaunch on another project and close this window.
+#[tauri::command]
+fn projects_open(app: AppHandle, path: String) -> Result<(), String> {
+    projects::spawn_on(Path::new(&path))?;
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(600));
+        app.exit(0);
+    });
+    Ok(())
 }
 
 #[tauri::command]
@@ -228,9 +274,10 @@ fn open_path(app: AppHandle, root: State<Root>, rel: String, line: Option<u32>) 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // No project is not an error: the window opens on the Projects screen instead.
     let root = workspace::find_root().unwrap_or_else(|e| {
         eprintln!("{e}");
-        PathBuf::from(".")
+        PathBuf::new()
     });
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -240,13 +287,20 @@ pub fn run() {
         .setup(|app| {
             if let Some(w) = app.get_webview_window("main") {
                 let root = app.state::<Root>();
-                let _ = w.set_title(&format!("{} Desk", config::load(&root.0).project));
+                let title = if root.0.as_os_str().is_empty() { "Desk".to_string() } else { format!("{} Desk", config::load(&root.0).project) };
+                let _ = w.set_title(&title);
                 let _ = w.maximize();
             }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             load_workspace,
+            projects_recent,
+            projects_forget,
+            projects_home,
+            projects_pick_folder,
+            projects_create,
+            projects_open,
             save_item,
             next_id,
             read_text,

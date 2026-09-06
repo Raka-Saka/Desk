@@ -111,8 +111,16 @@ export const STATUS_HELP: Record<string, string> = {
   done: "verified, evidence attached",
 };
 
+export interface KnownProject { path: string; name: string; last_opened: string; exists: boolean }
+
 export const api = {
   load: () => invoke<Workspace>("load_workspace"),
+  projectsRecent: () => invoke<KnownProject[]>("projects_recent"),
+  projectsForget: (path: string) => invoke<void>("projects_forget", { path }),
+  projectsHome: () => invoke<string | null>("projects_home"),
+  projectsPickFolder: () => invoke<string | null>("projects_pick_folder"),
+  projectsCreate: (parent: string, folder: string, name: string) => invoke<string>("projects_create", { parent, folder, name }),
+  projectsOpen: (path: string) => invoke<void>("projects_open", { path }),
   saveItem: (item: Item) => invoke<Item>("save_item", { item }),
   nextId: (prefix: string) => invoke<string>("next_id", { prefix }),
   readText: (rel: string) => invoke<string>("read_text", { rel }),
