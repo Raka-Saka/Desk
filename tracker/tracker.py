@@ -394,9 +394,19 @@ def cmd_init(args) -> int:
         p.write_text(text, encoding="utf-8", newline="\n")
         written.append(rel)
 
+    def rel_or_abs(target: Path) -> str:
+        """Repo-relative when the desk lives inside the project; absolute when it is elsewhere (or another drive)."""
+        try:
+            r = os.path.relpath(target, root)
+            return r.replace("\\", "/") if not r.startswith("..") else str(target).replace("\\", "/")
+        except ValueError:  # different drive on Windows
+            return str(target).replace("\\", "/")
+
     cfg = json.loads((TEMPLATES / "desk.json").read_text(encoding="utf-8"))
     cfg["project"] = project
-    cfg["tracker"] = args.tracker or os.path.relpath(HERE / "tracker.py", root).replace("\\", "/")
+    cfg["tracker"] = args.tracker or rel_or_abs(HERE / "tracker.py")
+    for c in cfg.get("commands", []):
+        c["args"] = [a.replace("${root}/Tools/desk/tracker/tracker.py", cfg["tracker"] if cfg["tracker"].startswith(("/", "${")) or ":" in cfg["tracker"] else "${root}/" + cfg["tracker"]) for a in c["args"]]
     put(MARKER, json.dumps(cfg, indent=2) + "\n", overwrite=args.force)
     phases = json.loads((TEMPLATES / "phases.json").read_text(encoding="utf-8"))
     phases["phases"][0]["started"] = date.today().isoformat()
@@ -407,7 +417,12 @@ def cmd_init(args) -> int:
     for d in ("docs/tracker/items", "docs/tracker/qa/runs", "docs/tracker/runs", "docs/tracker/sessions", "docs/media"):
         (root / d).mkdir(parents=True, exist_ok=True)
     put(".mcp.json", (TEMPLATES / "mcp.json").read_text(encoding="utf-8"))
-    put("desk.cmd", (TEMPLATES / "desk.cmd").read_text(encoding="utf-8").replace("{{desk}}", os.path.relpath(HERE.parent, root).replace("/", "\\")))
+    desk_dir = rel_or_abs(HERE.parent).replace("/", "\\")
+    # desk.cmd prefixes {{desk}} with %ROOT% (the project folder, with a trailing backslash); an absolute desk
+    # path therefore drops that prefix.
+    cmd_text = (TEMPLATES / "desk.cmd").read_text(encoding="utf-8")
+    cmd_text = cmd_text.replace("set DESK=%ROOT%{{desk}}", f"set DESK={desk_dir}" if ":" in desk_dir[:2] else f"set DESK=%ROOT%{desk_dir}")
+    put("desk.cmd", cmd_text)
     # A first item, so the dashboard has a queue on day one.
     global PROJECT, TRACKER, ITEMS, PHASES, BACKLOG
     PROJECT, TRACKER = root, root / "docs" / "tracker"
