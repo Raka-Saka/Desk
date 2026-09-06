@@ -85,10 +85,20 @@ function suiteCard(ws: Workspace, s: Suite, st: QaState): string {
       <li>${statusDot(r.status)} ${esc(stepLabel(r.step))}
         ${r.tests_total ? `<span class="muted small">${r.tests_passed}/${r.tests_total}</span>` : ""}
         ${r.status === "pending" && last && (r.step.type === "sheets" || r.step.type === "playtest") ? `<button class="small" data-action="suite-complete" data-run="${esc(last.id)}" data-step="${i}">do it now</button>` : ""}
-        ${r.status === "fail" && r.summary.length ? `<div class="muted small fail-note">${esc(r.summary.slice(-1)[0])}</div>` : ""}
+        ${r.status === "fail" ? failNote(ws, r) : ""}
       </li>`).join("")}</ul>
     <div class="muted small">${last ? `last: ${esc(last.status)} · ${esc(last.started)} @ ${esc(last.commit)}${last.tester ? ` · ${esc(last.tester)}` : ""}` : "never run"}</div>
   </div>`;
+}
+
+// A failed step shows the lines that say what failed, not only the verdict, and links the
+// run's own log. "FAIL: 1 of 5 layers" on its own sends the reader nowhere.
+function failNote(ws: Workspace, r: StepResult): string {
+  const telling = r.summary.filter((l) => /FAIL|Error|failed|exit/i.test(l) && !/^FAIL: \d+ of \d+ layers/.test(l.trim()));
+  const lines = (telling.length ? telling : r.summary).slice(-4);
+  const rec = r.run_id ? ws.runs.find((x) => x.id === r.run_id) : undefined;
+  const log = rec?.log_path ? ` <a class="file" data-action="show-log" data-path="${esc(rec.log_path)}">open the run log</a>` : "";
+  return `<div class="small fail-note">${lines.map((l) => `<div>${esc(l.trim())}</div>`).join("")}${r.exit_code ? `<span class="muted">exit ${r.exit_code}</span>` : ""}${log}</div>`;
 }
 
 function suitesTab(ws: Workspace, st: QaState): string {
