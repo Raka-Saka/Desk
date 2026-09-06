@@ -127,6 +127,53 @@ pub struct Library {
     pub shared: Vec<String>,
 }
 
+/// The View panel (ADR-0026 in Basin): a development run of the game with a remote console, a
+/// place picker over baked face maps, and pictures filed with the frame that took them.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct View {
+    /// How to start the game with its remote console on. `${root}`, `${ue_root}` expand.
+    pub program: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    /// The remote console's HTTP port (Remote Control API default 30010).
+    #[serde(default = "default_view_port")]
+    pub port: u16,
+    /// Console command templates. Fields: {lat} {lon} {yaw} {pitch} {height} {hour} {w} {h} {name}.
+    #[serde(default = "default_view_command")]
+    pub view_command: String,
+    #[serde(default = "default_shoot_command")]
+    pub shoot_command: String,
+    /// Where the game writes screenshots (searched recursively for the newest PNG after a shot).
+    #[serde(default = "default_screenshots")]
+    pub screenshots: String,
+    /// Saved frames.
+    #[serde(default = "default_frames")]
+    pub frames: String,
+    /// A bake folder with meta.json (face_axes, resolution, overlap_px) and site.json.
+    #[serde(default)]
+    pub bake: String,
+    /// The face map to show, with {face} for PX..NZ, relative to `bake`.
+    #[serde(default)]
+    pub face_map: String,
+    /// The world object path the console command runs in (HighResShot needs a player's viewport,
+    /// which needs a world). Empty: read GameDefaultMap from Config/DefaultEngine.ini.
+    #[serde(default)]
+    pub world: String,
+    /// Picture size for a shot.
+    #[serde(default = "default_shot_w")]
+    pub width: u32,
+    #[serde(default = "default_shot_h")]
+    pub height: u32,
+}
+
+fn default_view_port() -> u16 { 30010 }
+fn default_view_command() -> String { "Basin.ViewAt {lat} {lon} {yaw} {pitch} {height} {hour}".into() }
+fn default_shoot_command() -> String { "HighResShot {w}x{h}".into() }
+fn default_screenshots() -> String { "Saved/Screenshots".into() }
+fn default_frames() -> String { "docs/media/frames.json".into() }
+fn default_shot_w() -> u32 { 1600 }
+fn default_shot_h() -> u32 { 900 }
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     #[serde(default = "default_project")]
@@ -159,6 +206,8 @@ pub struct Config {
     pub design: Option<Design>,
     #[serde(default)]
     pub library: Option<Library>,
+    #[serde(default)]
+    pub view: Option<View>,
 }
 
 fn default_project() -> String { "Project".into() }

@@ -95,6 +95,17 @@ or to `env.KEY` below when the variable is unset. Relative paths are relative to
     "fetch": ["python", "Tools/science/fetch_papers.py"],
     "render": ["python", "Tools/science/render_bibliography.py"],
     "shared": []                           // other shelves: folders with sources.json, papers/, text/
+  },
+  "view": {                                // optional: the Viewfinder (see VIEW.md)
+    "program": "${ue_root}/Engine/Binaries/Win64/UnrealEditor-Cmd.exe",
+    "args": ["${root}/Basin.uproject", "-game", "-windowed", "-EnablePlugins=RemoteControl", "-RCWebControlEnable", "..."],
+    "port": 30010,
+    "view_command": "Basin.ViewAt {lat} {lon} {yaw} {pitch} {height} {hour}",
+    "shoot_command": "HighResShot {w}x{h}",
+    "screenshots": "Saved/Screenshots",
+    "frames": "docs/media/frames.json",
+    "bake": "Tools/baker/out/Home/1",
+    "face_map": "T_Home_H_{face}.png"
   }
 }
 ```

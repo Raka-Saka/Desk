@@ -12,6 +12,7 @@ pub mod projects;
 pub mod runner;
 pub mod sessions;
 pub mod suites;
+pub mod view;
 pub mod workspace;
 
 use items::Item;
@@ -66,6 +67,45 @@ fn open_url(app: AppHandle, url: String) -> Result<(), String> {
     }
     use tauri_plugin_opener::OpenerExt;
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
+}
+
+// --- view --------------------------------------------------------------------------------------
+
+#[tauri::command]
+fn view_state(root: State<Root>) -> view::ViewState {
+    view::load(&root.0)
+}
+
+#[tauri::command]
+fn view_launch(app: AppHandle, root: State<Root>, running: State<Running>) -> Result<String, String> {
+    let spec = view::launch_spec(&root.0).ok_or("no view block in desk.json")?;
+    runner::start(Arc::new(app), running.0.clone(), root.0.clone(), spec)
+}
+
+#[tauri::command]
+fn view_console(root: State<Root>, command: String) -> Result<String, String> {
+    let c = config::load(&root.0).view.ok_or("no view block in desk.json")?;
+    view::console(&root.0, c.port, &command)
+}
+
+#[tauri::command]
+fn view_go(root: State<Root>, frame: view::Frame) -> Result<String, String> {
+    view::go(&root.0, &frame)
+}
+
+#[tauri::command]
+fn view_shoot(root: State<Root>, frame: view::Frame, phase: String) -> Result<media::MediaRecord, String> {
+    view::shoot(&root.0, &frame, &phase)
+}
+
+#[tauri::command]
+fn view_save_frame(root: State<Root>, frame: view::Frame) -> Result<Vec<view::Frame>, String> {
+    view::save_frame(&root.0, frame)
+}
+
+#[tauri::command]
+fn view_delete_frame(root: State<Root>, name: String) -> Result<Vec<view::Frame>, String> {
+    view::delete_frame(&root.0, &name)
 }
 
 // --- projects ----------------------------------------------------------------------------------
@@ -328,6 +368,13 @@ pub fn run() {
             projects_pick_folder,
             projects_create,
             projects_open,
+            view_state,
+            view_launch,
+            view_console,
+            view_go,
+            view_shoot,
+            view_save_frame,
+            view_delete_frame,
             library_search,
             library_propose,
             library_decide,

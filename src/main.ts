@@ -6,13 +6,14 @@ import { media, type MediaState } from "./media";
 import { isSuite, qa, type QaState } from "./qa";
 import { projects, type ProjectsState } from "./projects";
 import { library, type LibraryState } from "./library";
+import { blankFrame, latLonFromPixel, viewPanel, type ViewPanelState } from "./view";
 import { board, bugs, currentPhase, dashboard, itemHeader, production, scope } from "./views";
 import { cmpId, esc, md, option, today } from "./util";
 import { mediaUrl } from "./api";
 import { invoke } from "./api";
 import { HAS_TAURI, READ_ONLY } from "./preview";
 
-type View = "dashboard" | "board" | "scope" | "bugs" | "qa" | "media" | "design" | "library" | "production" | "dev" | "guide" | "projects";
+type View = "dashboard" | "board" | "scope" | "bugs" | "qa" | "media" | "design" | "library" | "view" | "production" | "dev" | "guide" | "projects";
 
 function freshDraft(kind: "sheets" | "playtest"): QaRun {
   return { kind, date: today(), commit: "", build: "PIE", tester: "", results: {}, gate: {}, minutes: 30, notes: "" };
@@ -31,6 +32,7 @@ const state = {
   library: { tab: "sources", domain: "all", query: "", hits: null, searching: false, open: null, proposing: false, onlyUnsourced: false } as LibraryState,
   noProject: false,
   palette: { open: false, q: "", sel: 0 },
+  viewp: { v: null, frame: blankFrame(), busy: "", log: [], last: null, console: "" } as ViewPanelState,
   commands: [] as CommandSpec[],
   console: null as ConsoleState | null,
   guide: "",
@@ -49,6 +51,7 @@ const NAV: [View, string, string][] = [
   ["media", "Media inbox", "evidence and captures"],
   ["design", "Recipes", "balance cost and value"],
   ["library", "Research", "sources and claims"],
+  ["view", "Viewfinder", "a chosen viewpoint, live"],
   ["production", "Roadmap", "phases, gates, decisions"],
   ["dev", "Workbench", "checks, builds, commits"],
   ["guide", "Playbook", "how Desk is managed"],
@@ -113,6 +116,7 @@ function render() {
     case "guide": body = `<section class="card md guide">${md(state.guide)}</section>`; break;
     case "projects": body = projects(state.projects, ws.root); break;
     case "library": body = library(ws, state.library); break;
+    case "view": body = viewPanel(ws, state.viewp); if (!state.viewp.v) setTimeout(refreshView, 0); break;
   }
   const live = state.qa.live && state.qa.live.status === "running" ? state.qa.live : null;
   const focusItem = ws.items.filter((i) => ["now", "yours"].includes(i.status) && i.kind !== "epic").sort((a, b) => a.priority.localeCompare(b.priority) || cmpId(a.id, b.id))[0];
@@ -120,7 +124,7 @@ function render() {
     <aside class="side">
       <div class="brand"><span class="brand-mark">D</span><span class="brand-word">Desk</span></div>
       <div class="rail-caption">Navigate</div>
-      <nav class="rail-nav">${NAV.filter(([v]) => (v !== "design" || ws.config.design) && (v !== "library" || ws.library.enabled)).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}" title="${esc(d)}"><span class="nav-icon">${["⌂","◈","⌁","!","✓","▧","◇","⌕","◷","⌘","☰","●"][NAV.findIndex(([n]) => n === v)]}</span><span class="rail-text"><b>${l}</b>${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</span></a>`).join("")}</nav>
+      <nav class="rail-nav">${NAV.filter(([v]) => (v !== "design" || ws.config.design) && (v !== "library" || ws.library.enabled) && (v !== "view" || ws.config.view)).map(([v, l, d]) => `<a class="${state.view === v ? "active" : ""}" data-view="${v}" title="${esc(d)}"><span class="nav-icon">${["⌂","◈","⌁","!","✓","▧","◇","⌕","◉","◷","⌘","☰","●"][NAV.findIndex(([n]) => n === v)]}</span><span class="rail-text"><b>${l}</b>${v === "media" && ws.inbox.length ? ` <span class="pill">${ws.inbox.length}</span>` : ""}</span></a>`).join("")}</nav>
       <div class="side-foot">
         <div class="avatar">${esc((ws.config.project ?? "D").slice(0,1).toUpperCase())}</div>
         <button data-action="reload" title="Re-read the repo">↻</button>
@@ -191,6 +195,33 @@ function drawer(ws: Workspace, d: { item: Item; editing: boolean; isNew: boolean
   </aside>`;
 }
 
+async function refreshView() {
+  state.viewp.v = await api.viewState().catch(() => null);
+  if (state.viewp.v && !state.viewp.frame.body) state.viewp.frame.body = state.viewp.v.body;
+  if (state.view === "view") render();
+}
+
+function vlog(line: string) { state.viewp.log.push(`${new Date().toLocaleTimeString()}  ${line}`); }
+
+async function viewAction(kind: "go" | "shoot" | "both") {
+  const vp = state.viewp;
+  const f = { ...vp.frame };
+  try {
+    if (kind !== "shoot") {
+      vp.busy = "moving the camera"; render();
+      const cmd = await api.viewGo(f); vlog(`sent: ${cmd}`);
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    if (kind !== "go") {
+      vp.busy = "waiting for the picture"; render();
+      const rec = await api.viewShoot(f, currentPhase(state.ws!).id);
+      vp.last = rec; vlog(`filed ${rec.file}`);
+      await reload();
+    }
+  } catch (e) { vlog(String(e)); toast(String(e), 6000); }
+  vp.busy = ""; await refreshView();
+}
+
 function paletteMatches(ws: Workspace): Item[] {
   const q = state.palette.q.trim().toLowerCase();
   const words = q.split(/\s+/).filter(Boolean);
@@ -236,6 +267,13 @@ document.addEventListener("keydown", (ev) => {
 app.addEventListener("input", (ev) => {
   const t = ev.target as HTMLInputElement;
   if (t.dataset.palette !== undefined) { state.palette.q = t.value; state.palette.sel = 0; render(); }
+  if (t.dataset.vf) {
+    const f = state.viewp.frame as unknown as Record<string, unknown>;
+    const k = t.dataset.vf;
+    f[k] = k === "name" || k === "note" ? t.value : Number(t.value);
+    if (k === "hour" || k === "lat" || k === "lon") render(); // marker and clock follow
+  }
+  if (t.dataset.viewConsole !== undefined) state.viewp.console = t.value;
 });
 
 async function openItem(id: string) {
@@ -519,6 +557,30 @@ app.addEventListener("click", async (ev) => {
     case "palette": state.palette = { open: true, q: "", sel: 0 }; render(); break;
     case "palette-close": state.palette.open = false; render(); break;
     case "palette-stay": break;
+    // Viewfinder
+    case "view-launch": try { state.viewp.busy = "launching"; render(); const id = await api.viewLaunch(); vlog(`launched, run ${id}`); state.view = "view"; } catch (e) { toast(String(e), 6000); } state.viewp.busy = ""; setTimeout(refreshView, 4000); render(); break;
+    case "view-quit": await api.viewConsole("quit").then(() => vlog("quit sent")).catch((e) => vlog(String(e))); setTimeout(refreshView, 1500); render(); break;
+    case "view-go": await viewAction("go"); break;
+    case "view-shoot": await viewAction("shoot"); break;
+    case "view-go-shoot": await viewAction("both"); break;
+    case "view-save": try { state.viewp.v!.frames = await api.viewSaveFrame(state.viewp.frame); toast("frame saved"); } catch (e) { toast(String(e), 5000); } render(); break;
+    case "view-load": { const fr = state.viewp.v?.frames.find((x) => x.name === t.dataset.name); if (fr) state.viewp.frame = { ...fr }; render(); break; }
+    case "view-reshoot": { const fr = state.viewp.v?.frames.find((x) => x.name === t.dataset.name); if (fr) { state.viewp.frame = { ...fr }; await viewAction("both"); } break; }
+    case "view-delete": if (confirm(`Delete frame ${t.dataset.name}?`)) { state.viewp.v!.frames = await api.viewDeleteFrame(t.dataset.name!).catch(() => state.viewp.v!.frames); render(); } break;
+    case "view-place": state.viewp.frame.lat = Number(t.dataset.lat); state.viewp.frame.lon = Number(t.dataset.lon); render(); break;
+    case "view-face": {
+      const img = t as HTMLImageElement; const me = ev as MouseEvent;
+      const hit = state.viewp.v ? latLonFromPixel(state.viewp.v, img.dataset.face!, me.offsetX, me.offsetY, img.clientWidth, img.clientHeight) : null;
+      if (hit) { state.viewp.frame.lat = hit[0]; state.viewp.frame.lon = hit[1]; render(); }
+      break;
+    }
+    case "view-console": {
+      const inp = document.querySelector<HTMLInputElement>("[data-view-console]"); const cmd = inp?.value.trim() ?? "";
+      if (!cmd) break;
+      state.viewp.console = "";
+      await api.viewConsole(cmd).then((r) => vlog(`${cmd} -> ${r.replace(/\s+/g, " ").slice(0, 120) || "ok"}`)).catch((e) => vlog(String(e)));
+      render(); break;
+    }
     case "new-bug": newItem("bug"); break;
     case "drawer-close": state.drawer = null; render(); break;
     case "drawer-cancel": if (state.drawer?.isNew) state.drawer = null; else state.drawer!.editing = false; render(); break;

@@ -50,6 +50,7 @@ Arguments are JSON objects; results are text (JSON pretty-printed) with `isError
 | `desk_library_source` | `slug` | one source in full, the claims citing it, the first 3,000 characters of its text |
 | `desk_library_claims` | `only_unsourced?`, `only_failing?`, `body?` | the claims index with principle, linked sources and checks |
 | `desk_library_search` | `query`, `per_source?` | metadata and full-text hits with snippets |
+| `desk_view_state` | — | the Viewfinder: faces, named places, saved frames, whether a game answers (needs `view` in desk.json) |
 
 ### Writing
 
@@ -71,6 +72,11 @@ Arguments are JSON objects; results are text (JSON pretty-printed) with `isError
 |---|---|---|
 | `desk_run_command` | `name` | runs one catalogue command to completion; returns its record (`exit_code`, `summary`, `tests_passed/total`, `log_path`) |
 | `desk_run_suite` | `suite`, `tester?`, `build?` | starts a suite in the background; returns `suite_run_id`; poll with `desk_get_run` |
+| `desk_view_launch` | — | starts the game with its remote console; poll `desk_view_state.live` |
+| `desk_view_console` | `command` | one console command to the running game |
+| `desk_view_go` | `lat`, `lon`, `yaw?`, `pitch?`, `height?`, `hour?` | moves the camera (needs the game's view command) |
+| `desk_view_shoot` | frame fields + `phase?` | takes a picture and files it in docs/media with the frame in its caption |
+| `desk_view_save_frame` | frame fields | keeps the frame by name in frames.json |
 
 ### Sessions
 

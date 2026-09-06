@@ -8,7 +8,7 @@ use crate::items::{self, Item};
 use crate::runner::{self, NoEvents};
 use crate::sessions::{self, Closure, SessionRecord};
 use crate::workspace::{self, git, qa_runs_dir, render_backlog};
-use crate::{design, library, media, suites};
+use crate::{design, library, media, suites, view};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
@@ -169,6 +169,40 @@ impl Server {
                     return Err("a source gets onto the shelf by being read: accept only with attested_by_user=true and the user's words in `note`".into());
                 }
                 Ok(serde_json::to_value(library::decide(&self.root, &s(a, "slug"), accept, &s(a, "note"))?).unwrap())
+            }
+            "desk_view_state" => Ok(serde_json::to_value(view::load(&self.root)).unwrap()),
+            "desk_view_launch" => {
+                let spec = view::launch_spec(&self.root).ok_or("no view block in desk.json")?;
+                let id = runner::start(Arc::new(NoEvents), self.running.clone(), self.root.clone(), spec)?;
+                if let Some(sess) = &mut self.session { sess.runs.push(id.clone()); }
+                self.save_session();
+                Ok(json!({"run_id": id, "note": "the game takes about a minute to answer; poll desk_view_state until live is true"}))
+            }
+            "desk_view_console" => {
+                let c = crate::config::load(&self.root).view.ok_or("no view block in desk.json")?;
+                Ok(json!({"reply": view::console(&self.root, c.port, &s(a, "command"))?}))
+            }
+            "desk_view_go" => {
+                let f: view::Frame = serde_json::from_value(a.clone()).map_err(|e| format!("bad frame: {e}"))?;
+                Ok(json!({"sent": view::go(&self.root, &f)?}))
+            }
+            "desk_view_shoot" => {
+                let f: view::Frame = serde_json::from_value(a.clone()).map_err(|e| format!("bad frame: {e}"))?;
+                let mut phase = s(a, "phase");
+                if phase.is_empty() {
+                    phase = workspace::load(&self.root).ok().and_then(|w| {
+                        let list = ["phases", "loop"].iter().find_map(|k| w.phases.get(*k).and_then(|x| x.as_array().cloned())).or_else(|| w.phases.as_array().cloned()).unwrap_or_default();
+                        list.iter().find(|p| p.get("status").and_then(|x| x.as_str()) == Some("open")).and_then(|p| p.get("id").and_then(|x| x.as_str()).map(str::to_string))
+                    }).unwrap_or_default();
+                }
+                let rec = view::shoot(&self.root, &f, &phase)?;
+                if let Some(sess) = &mut self.session { sess.media.push(rec.id.clone()); }
+                self.save_session();
+                Ok(serde_json::to_value(rec).unwrap())
+            }
+            "desk_view_save_frame" => {
+                let f: view::Frame = serde_json::from_value(a.clone()).map_err(|e| format!("bad frame: {e}"))?;
+                Ok(serde_json::to_value(view::save_frame(&self.root, f)?).unwrap())
             }
             "desk_start_session" => {
                 let rec = sessions::start(&self.root, &s(a, "agent"), &s(a, "purpose"), &s(a, "compartment"))?;
@@ -488,6 +522,12 @@ fn tool_list() -> Vec<Value> {
         tool("desk_library_search", "Search titles, authors, what sources settle, and the full text cache; returns snippets.", json!({"query": str_(""), "per_source": {"type": "integer"}}), &["query"]),
         tool("desk_library_propose", "The research action's output: propose a candidate source with why, recency, credentials and a contradictions pass (all required). It waits for a person to read and accept it.", json!({"title": str_(""), "url": str_(""), "authors": strs(""), "year": {"type": "integer"}, "venue": str_(""), "domain": str_(""), "why": str_("what it settles or supplies"), "recency": str_("what has been published since; still the reference?"), "credentials": str_("affiliation, prior work, venue -- and how verified"), "contradictions": str_("which shelf papers it agrees/disagrees with, and where"), "slug": str_("optional")}), &["title", "url", "why", "recency", "credentials", "contradictions"]),
         tool("desk_library_decide", "Accept (needs attested_by_user and the user's words in note) or reject a candidate. Accept appends to sources.json and runs the project's fetch and render hooks.", json!({"slug": str_(""), "accept": {"type": "boolean"}, "note": str_(""), "attested_by_user": {"type": "boolean"}}), &["slug", "accept"]),
+        tool("desk_view_state", "The Viewfinder: faces, named places, saved frames, and whether a game with its remote console is live (ADR-0026).", json!({}), &[]),
+        tool("desk_view_launch", "Start the game windowed with its remote console on. Returns a run id; poll desk_view_state.live.", json!({}), &[]),
+        tool("desk_view_console", "Send one console command to the running game (e.g. 'stat fps', 'quit').", json!({"command": str_("")}), &["command"]),
+        tool("desk_view_go", "Move the camera to a frame: lat, lon (degrees, bake frame), yaw, pitch, height (m above ground), hour (local). Needs Basin.ViewAt in the game (item 3.24).", json!({"name": str_(""), "lat": {"type": "number"}, "lon": {"type": "number"}, "yaw": {"type": "number"}, "pitch": {"type": "number"}, "height": {"type": "number"}, "hour": {"type": "number"}}), &["lat", "lon"]),
+        tool("desk_view_shoot", "Take a picture from the current camera and file it in docs/media with the frame in its caption. Same fields as desk_view_go plus phase (default: the open phase).", json!({"name": str_(""), "lat": {"type": "number"}, "lon": {"type": "number"}, "yaw": {"type": "number"}, "pitch": {"type": "number"}, "height": {"type": "number"}, "hour": {"type": "number"}, "note": str_(""), "phase": str_("")}), &["name", "lat", "lon"]),
+        tool("desk_view_save_frame", "Save a frame by name in docs/media/frames.json so the picture can be taken again.", json!({"name": str_(""), "lat": {"type": "number"}, "lon": {"type": "number"}, "yaw": {"type": "number"}, "pitch": {"type": "number"}, "height": {"type": "number"}, "hour": {"type": "number"}, "note": str_("")}), &["name", "lat", "lon"]),
         tool("desk_start_session", "Open a session record (docs/tracker/sessions). Do this first.", json!({"agent": str_("who: e.g. 'Claude Fable 5.1 / crafting'"), "purpose": str_("one sentence"), "compartment": str_("assets|logic|research|docs|qa|tooling|design|science")}), &["agent", "purpose"]),
         tool("desk_end_session", "Close the session with a summary and what was left for the user.", json!({"summary": str_(""), "left_for_user": strs("things only the user can do")}), &["summary"]),
         tool("desk_list_sessions", "Recent session records, newest first.", json!({"limit": {"type": "integer"}}), &[]),

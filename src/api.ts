@@ -60,7 +60,7 @@ export interface SessionClosure { item: string; class: string; run_id: string; c
 export interface SessionRecord { id: string; agent: string; purpose: string; compartment: string; started: string; ended: string; summary: string; commit_at_start: string; items_touched: string[]; items_created: string[]; runs: string[]; media: string[]; closures: SessionClosure[]; left_for_user: string[] }
 export interface CodeArea { label: string; files: number; lines: number }
 export interface CodeStats { areas: CodeArea[]; automation_tests: number; items_files_missing: string[] }
-export interface DeskConfig { project?: string; docs?: { sheets?: string; roadmap?: string; guide?: string }; playtest_gate?: [string, string][]; builds?: string[]; design?: { recipes: string; push_suite?: string } }
+export interface DeskConfig { view?: unknown; project?: string; docs?: { sheets?: string; roadmap?: string; guide?: string }; playtest_gate?: [string, string][]; builds?: string[]; design?: { recipes: string; push_suite?: string } }
 export interface CommandSpec { name: string; label: string; description: string; group: string; program: string; args: string[]; minutes: number }
 
 export interface QaRun {
@@ -125,6 +125,11 @@ export interface LibClaim { body: string; file: string; line: number; section: s
 export interface LibCandidate { slug: string; title: string; authors: string[]; year: unknown; venue: string; url: string; domain: string; why: string; recency: string; credentials: string; contradictions: string; proposed_by: string; proposed_at: string; status: string; decision_note: string; decided_at: string }
 export interface Library { enabled: boolean; sources: LibSource[]; claims: LibClaim[]; candidates: LibCandidate[]; domains: string[]; contradictions: string[]; shelves: string[] }
 export interface LibHit { slug: string; title: string; where_: string; snippet: string }
+export interface Frame { name: string; body: string; lat: number; lon: number; yaw: number; pitch: number; height: number; hour: number; note: string; created: string; shots: string[] }
+export interface FaceAxes { out: [number, number, number]; right: [number, number, number]; up: [number, number, number] }
+export interface FaceMap { face: string; path: string; axes: FaceAxes }
+export interface Place { label: string; lat: number; lon: number; why: string; elevation_m: number }
+export interface ViewState { enabled: boolean; port: number; body: string; resolution: number; overlap: number; faces: FaceMap[]; places: Place[]; frames: Frame[]; view_command: string; shoot_command: string; width: number; height: number; live: boolean }
 
 export const api = {
   load: () => invoke<Workspace>("load_workspace"),
@@ -138,6 +143,13 @@ export const api = {
   libraryPropose: (candidate: Partial<LibCandidate>) => invoke<LibCandidate>("library_propose", { candidate }),
   libraryDecide: (slug: string, accept: boolean, note: string) => invoke<LibCandidate>("library_decide", { slug, accept, note }),
   openUrl: (url: string) => invoke<void>("open_url", { url }),
+  viewState: () => invoke<ViewState>("view_state"),
+  viewLaunch: () => invoke<string>("view_launch"),
+  viewConsole: (command: string) => invoke<string>("view_console", { command }),
+  viewGo: (frame: Frame) => invoke<string>("view_go", { frame }),
+  viewShoot: (frame: Frame, phase: string) => invoke<MediaRecord>("view_shoot", { frame, phase }),
+  viewSaveFrame: (frame: Frame) => invoke<Frame[]>("view_save_frame", { frame }),
+  viewDeleteFrame: (name: string) => invoke<Frame[]>("view_delete_frame", { name }),
   saveItem: (item: Item) => invoke<Item>("save_item", { item }),
   nextId: (prefix: string) => invoke<string>("next_id", { prefix }),
   readText: (rel: string) => invoke<string>("read_text", { rel }),

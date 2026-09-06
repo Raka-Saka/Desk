@@ -14,6 +14,7 @@ can have the same discipline. Everything project-specific is one file in the pro
 - [docs/LINKING.md](docs/LINKING.md) — how a project is linked: `init`, every field of `desk.json`, what the desk expects.
 - [docs/MCP.md](docs/MCP.md) — the MCP server: the shape of a session, every tool, classified closures, the records.
 - [docs/FORMATS.md](docs/FORMATS.md) — items, phases, suites, sheets, runs, media, sessions.
+- [docs/VIEW.md](docs/VIEW.md) — the Viewfinder: a chosen viewpoint on a running game, over its remote console.
 - [docs/LIBRARY.md](docs/LIBRARY.md) — the library: sources, claims, candidates, the research action, shared shelves.
 
 ## Give a project a desk
