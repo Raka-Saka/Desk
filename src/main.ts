@@ -7,7 +7,7 @@ import { isSuite, qa, type QaState } from "./qa";
 import { projects, type ProjectsState } from "./projects";
 import { citation, findAll, library, type LibraryState } from "./library";
 import { blankFrame, latLonFromPixel, viewPanel, type ViewPanelState } from "./view";
-import { board, bugs, currentPhase, dashboard, itemHeader, production, scope } from "./views";
+import { adrDrawer, board, bugs, currentPhase, dashboard, itemHeader, production, scope } from "./views";
 import { cmpId, esc, md, option, today } from "./util";
 import { mediaUrl } from "./api";
 import { invoke } from "./api";
@@ -27,7 +27,8 @@ const state = {
   qa: { tab: "suites", draft: freshDraft("sheets"), target: null, live: null, tester: localStorage.getItem("tester") || "", build: "PIE", openRun: null } as QaState,
   media: { phase: "all", kind: "all", filing: null, open: null, editing: false } as MediaState,
   design: { draft: null, selected: "", report: null, loading: false, problems: null, places: [], dirty: false } as DesignState,
-  drawer: null as { item: Item; editing: boolean; isNew: boolean } | null,
+  drawer: null as { item: Item; editing: boolean; isNew: boolean; stamp?: number } | null,
+  adrOpen: null as string | null,
   projects: { known: [], home: null, creating: null, busy: "", error: "" } as ProjectsState,
   library: { tab: "sources", domain: "all", query: "", hits: null, searching: false, open: null, proposing: false, onlyUnsourced: false, reader: null } as LibraryState,
   noProject: false,
@@ -133,6 +134,7 @@ function render() {
     <aside class="context-rail"><div class="context-kicker">Workspace</div><h2>${esc(ws.config.project ?? "Desk")}</h2><div class="branch-line"><span class="status-dot good"></span>${esc(ws.branch)}</div><div class="context-rule"></div><div class="context-kicker">Current phase</div><div class="phase-name">${esc(ph.name)}</div><p class="context-copy">${esc(ph.gate)}</p><div class="context-stat"><span>Open work</span><strong>${openCount}</strong></div><div class="context-stat"><span>Attention</span><strong>${ws.items.filter((i) => i.status === "yours").length}</strong></div><div class="context-stat"><span>Working tree</span><strong>${ws.dirty.length || "—"}</strong></div><div class="context-bottom">${live ? `<div class="live"><span class="spin"></span>${esc(live.suite_name)}</div>` : `<span class="status-dot good"></span> Synced`}<span class="muted small">${ws.dirty.length ? "changes pending" : "all clear"}</span></div></aside>
     <main class="main"><header class="topbar"><div class="breadcrumbs"><span class="context-mobile">${esc(ws.config.project ?? "Project")} · </span><strong>${esc(NAV.find(([v]) => v === state.view)?.[1] ?? "Workspace")}</strong></div><div class="top-actions"><button class="search-trigger" data-action="palette"><span class="search-icon">⌕</span> Find an item <kbd>Ctrl K</kbd></button><button class="primary" data-action="new-item">Create item <span class="plus">+</span></button></div></header><div class="page-content"><div class="focus-ribbon"><span class="focus-mark">●</span><span class="eyebrow">In focus</span><strong>${focusItem ? `${esc(focusItem.id)} · ${esc(focusItem.title)}` : "Your queue is clear"}</strong><span class="muted">${focusItem ? "next verifiable action" : "choose a workspace to continue"}</span><span class="ribbon-status">${ws.dirty.length ? `${ws.dirty.length} files to commit` : "working tree clean"}</span></div>${body}</div></main>
     ${state.drawer ? drawer(ws, state.drawer) : ""}
+    ${state.adrOpen ? (ws.adrs.find((a) => a.number === state.adrOpen) ? adrDrawer(ws.adrs.find((a) => a.number === state.adrOpen)!) : "") : ""}
     ${state.logView !== null ? `<div class="modal" data-action="close-log"><pre class="log">${esc(state.logView)}</pre></div>` : ""}
     ${state.palette.open ? palette(ws) : ""}
     ${state.toast ? `<div class="toast">${esc(state.toast)}</div>` : ""}`;
@@ -294,7 +296,8 @@ async function openItem(id: string) {
   const it = state.ws?.items.find((i) => i.id === id);
   if (!it) return;
   state.media.open = null;
-  state.drawer = { item: structuredClone(it), editing: false, isNew: false };
+  const stamp = await api.fileStamp(`docs/tracker/items/${it.id}.md`).catch(() => 0);
+  state.drawer = { item: structuredClone(it), editing: false, isNew: false, stamp };
   render();
   if (it.files.length) {
     const commits = await api.commitsFor(it.files).catch(() => []);
@@ -324,10 +327,10 @@ async function saveForm(form: HTMLFormElement) {
   it.files = lines("files"); it.tests = lines("tests"); it.adrs = lines("adrs");
   if (d.isNew && state.ws!.items.some((x) => x.id === it.id)) { toast(`${it.id} already exists`); return; }
   try {
-    const saved = await api.saveItem(it);
+    const saved = await api.saveItem(it, d.stamp);
     await api.renderBacklog().catch((e) => toast("saved, but backlog render failed: " + e, 6000));
     await reload();
-    state.drawer = { item: saved, editing: false, isNew: false };
+    state.drawer = { item: saved, editing: false, isNew: false, stamp: await api.fileStamp(`docs/tracker/items/${saved.id}.md`).catch(() => 0) };
     render();
     toast(`saved ${saved.id}`);
   } catch (e) {
@@ -338,7 +341,7 @@ async function saveForm(form: HTMLFormElement) {
 async function quickStatus(status: string) {
   const d = state.drawer!;
   try {
-    const saved = await api.saveItem({ ...d.item, status });
+    const saved = await api.saveItem({ ...d.item, status }, d.stamp);
     await api.renderBacklog().catch(() => {});
     await reload();
     state.drawer = { item: saved, editing: false, isNew: false };
@@ -528,6 +531,31 @@ app.addEventListener("click", async (ev) => {
   const ws = state.ws ?? ({ items: [], sheets: [], qa_runs: [], media: [], config: {} } as unknown as Workspace);
   switch (t.dataset.action) {
     case "reload": await reload(); toast("reloaded"); break;
+
+    // --- Decisions. Every one of these writes the .md file itself.
+    case "adr-open": state.adrOpen = t.dataset.adr ?? null; render(); break;
+    case "open-adr-file": {
+      const a = ws.adrs.find((x) => x.number === state.adrOpen);
+      if (a) await api.openUrl(a.path).catch((e: unknown) => toast(String(e)));
+      break;
+    }
+    case "adr-accept": await signAdr("accepted"); break;
+    case "adr-reject": await signAdr("rejected"); break;
+    case "adr-supersede": await signAdr("superseded"); break;
+    case "adr-note": {
+      const a = ws.adrs.find((x) => x.number === state.adrOpen);
+      const box = document.querySelector<HTMLTextAreaElement>("[data-note]");
+      if (!a || !box) break;
+      await saveNote(a.path, box.value);
+      break;
+    }
+    case "item-note": {
+      const d = state.drawer;
+      const box = document.querySelector<HTMLTextAreaElement>("[data-note]");
+      if (!d || !box) break;
+      await saveNote(`docs/tracker/items/${d.item.id}.md`, box.value);
+      break;
+    }
     // Projects
     case "proj-new": state.projects.creating = { parent: "", folder: "", name: "" }; state.projects.error = ""; render(); break;
     case "proj-cancel": state.projects.creating = null; render(); break;
@@ -626,7 +654,7 @@ app.addEventListener("click", async (ev) => {
       render(); break;
     }
     case "new-bug": newItem("bug"); break;
-    case "drawer-close": state.drawer = null; render(); break;
+    case "drawer-close": state.adrOpen = null; state.drawer = null; render(); break;
     case "drawer-cancel": if (state.drawer?.isNew) state.drawer = null; else state.drawer!.editing = false; render(); break;
     case "drawer-edit": state.drawer!.editing = true; render(); break;
     case "open-item-file": api.open(`docs/tracker/items/${state.drawer!.item.id}.md`).catch((e) => toast(String(e), 5000)); break;
@@ -803,3 +831,35 @@ api.onSuiteDone(async ({ run }) => {
 });
 
 reload();
+
+
+// --- Decisions ------------------------------------------------------------------------------------
+//
+// Sign-off and notes both rewrite the markdown file. Nothing is stored beside
+// the repo, so git sees it and the next session reads it.
+
+async function signAdr(status: string) {
+  if (!state.adrOpen) return;
+  const who = (state.ws?.config as { signer?: string } | undefined)?.signer ?? "";
+  try {
+    await api.setAdrStatus(state.adrOpen, status, who);
+    await reload();
+    render();
+    toast(`ADR-${state.adrOpen} ${status}`);
+  } catch (e) {
+    toast("not signed: " + String(e), 6000);
+  }
+}
+
+async function saveNote(rel: string, text: string) {
+  if (!text.trim()) { toast("nothing to save"); return; }
+  const who = (state.ws?.config as { signer?: string } | undefined)?.signer ?? "";
+  try {
+    await api.appendNote(rel, text, who);
+    await reload();
+    render();
+    toast("note saved");
+  } catch (e) {
+    toast("not saved: " + String(e), 6000);
+  }
+}

@@ -1,6 +1,7 @@
 //! Basin Desk -- the desktop over `docs/tracker/`. Reads and writes the same files the
 //! Python tracker and a Claude session do, and runs the project's own checks.
 
+pub mod adr_write;
 pub mod config;
 pub mod design;
 pub mod frontmatter;
@@ -26,7 +27,7 @@ use tauri::{AppHandle, Manager, State};
 
 struct Root(PathBuf);
 
-fn inside(root: &Path, rel: &str) -> Result<PathBuf, String> {
+pub fn inside(root: &Path, rel: &str) -> Result<PathBuf, String> {
     if rel.contains("..") {
         return Err("path escapes the project".into());
     }
@@ -149,7 +150,20 @@ fn projects_open(app: AppHandle, path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn save_item(root: State<Root>, mut item: Item) -> Result<Item, String> {
+fn save_item(root: State<Root>, mut item: Item, expected_stamp: Option<u64>) -> Result<Item, String> {
+    // Staleness guard. The window holds an item in memory while an agent or an
+    // editor may be rewriting the same file. Without this the save wins silently
+    // and the other edit is gone with no error and no trace.
+    if let Some(expected) = expected_stamp {
+        let rel = format!("docs/tracker/items/{}.md", item.id);
+        let actual = adr_write::file_stamp(&root.0, &rel);
+        if actual != 0 && expected != 0 && actual != expected {
+            return Err(format!(
+                "{}.md changed on disk since you opened it. Close and reopen the item to see the newer version, then redo your edit.",
+                item.id
+            ));
+        }
+    }
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     if item.created.is_empty() {
         item.created = today.clone();
@@ -163,6 +177,21 @@ fn save_item(root: State<Root>, mut item: Item) -> Result<Item, String> {
     }
     items::save(&root.0, &item)?;
     Ok(item)
+}
+
+#[tauri::command]
+fn file_stamp(root: State<Root>, rel: String) -> u64 {
+    adr_write::file_stamp(&root.0, &rel)
+}
+
+#[tauri::command]
+fn set_adr_status(root: State<Root>, number: String, status: String, who: String) -> Result<workspace::Adr, String> {
+    adr_write::set_adr_status(&root.0, &number, &status, &who)
+}
+
+#[tauri::command]
+fn append_note(root: State<Root>, rel: String, text: String, who: String) -> Result<(), String> {
+    adr_write::append_note(&root.0, &rel, &text, &who)
 }
 
 #[tauri::command]
@@ -380,6 +409,9 @@ pub fn run() {
             library_decide,
             open_url,
             save_item,
+            file_stamp,
+            set_adr_status,
+            append_note,
             next_id,
             read_text,
             save_qa_run,

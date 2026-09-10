@@ -17,6 +17,9 @@ pub struct Adr {
     pub date: String,
     pub phase: String,
     pub path: String,
+    /// Full markdown, so the window can show a decision instead of only listing it.
+    #[serde(default)]
+    pub body: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -228,7 +231,7 @@ pub fn git_log(root: &Path, n: usize, paths: &[String]) -> Vec<Commit> {
         .collect()
 }
 
-fn adrs(root: &Path) -> Vec<Adr> {
+pub fn adrs_in(root: &Path) -> Vec<Adr> {
     let dir = root.join("docs").join("decisions");
     let mut out = vec![];
     let Ok(rd) = fs::read_dir(&dir) else { return out };
@@ -239,7 +242,7 @@ fn adrs(root: &Path) -> Vec<Adr> {
             continue;
         }
         let Ok(text) = fs::read_to_string(&path) else { continue };
-        let mut adr = Adr { number: name[..4].to_string(), title: String::new(), status: String::new(), date: String::new(), phase: String::new(), path: format!("docs/decisions/{name}") };
+        let mut adr = Adr { number: name[..4].to_string(), title: String::new(), status: String::new(), date: String::new(), phase: String::new(), path: format!("docs/decisions/{name}"), body: text.clone() };
         for line in text.lines().take(12) {
             if let Some(rest) = line.strip_prefix("# ") {
                 adr.title = rest.splitn(2, " — ").nth(1).unwrap_or(rest).trim().to_string();
@@ -410,7 +413,7 @@ pub fn load(root: &Path) -> Result<Workspace, String> {
         dirty,
         head,
         branch,
-        adrs: adrs(root),
+        adrs: adrs_in(root),
         sheets: sheets(root),
         qa_runs: json_dir(&qa_runs_dir(root)),
         runs: runs(root),
@@ -447,6 +450,7 @@ mod tests {
         let mc7 = s.iter().find(|x| x.id == "MC-7").unwrap();
         assert!(mc7.rows.iter().any(|r| r.id == "7.7" && r.automated));
         assert_eq!(s[0].rows[0].id, "1.1");
-        assert!(!adrs(&root).is_empty());
+        assert!(!adrs_in(&root).is_empty());
     }
 }
+

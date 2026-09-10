@@ -1,6 +1,6 @@
 // The read-mostly views: dashboard, board, scope, bugs, production. Each returns HTML; main.ts
 // wires clicks by delegation (data-item, data-open, data-action).
-import type { Item, Workspace } from "./api";
+import type { Adr, Item, Workspace } from "./api";
 import { STATUS_HELP } from "./api";
 import { badge, cmpId, daysSince, esc, fileLink, itemLink, md, queueOrder } from "./util";
 
@@ -222,7 +222,7 @@ export function production(ws: Workspace): string {
   <section class="card">
     <h2>Decisions <span class="muted">${ws.adrs.length} ADRs · a decision recorded here is not re-litigated in chat</span></h2>
     <table class="items">
-      ${ws.adrs.map((a) => `<tr><td class="id">${esc(a.number)}</td><td>${esc(a.title)}</td><td>${badge("adr", a.status.split(" ")[0])}</td><td class="muted">${esc(a.date)}</td><td class="muted">phase ${esc(a.phase)}</td><td>${fileLink(a.path)}</td></tr>`).join("")}
+      ${ws.adrs.map((a) => `<tr data-action="adr-open" data-adr="${esc(a.number)}" class="clickable"><td class="id">${esc(a.number)}</td><td>${esc(a.title)}</td><td>${badge("adr", a.status.split(" ")[0])}</td><td class="muted">${esc(a.date)}</td><td class="muted">phase ${esc(a.phase)}</td><td>${fileLink(a.path)}</td></tr>`).join("")}
     </table>
   </section>`;
 }
@@ -244,5 +244,45 @@ export function itemHeader(ws: Workspace, it: Item): string {
     ${it.files.length ? `<h4>Files</h4><ul class="files">${it.files.map((f) => `<li>${fileLink(f)}</li>`).join("")}</ul>` : ""}
     ${it.tests.length ? `<h4>Tests</h4><ul class="tests">${it.tests.map((t) => `<li><code>${esc(t)}</code></li>`).join("")}</ul>` : ""}
     ${it.adrs.length ? `<h4>Decisions</h4><ul>${it.adrs.map((a) => { const adr = ws.adrs.find((x) => x.number === a); return `<li>${adr ? fileLink(adr.path) : esc(a)} ${adr ? esc(adr.title) : ""}</li>`; }).join("")}</ul>` : ""}
-    <div id="item-commits" class="muted small"></div>`;
+    <div id="item-commits" class="muted small"></div>
+    ${itemNotes()}`;
+}
+
+
+// --- Decision drawer ------------------------------------------------------------------------------
+//
+// A decision you cannot read is a decision you cannot sign. This shows the ADR
+// in the window and lets it be accepted, rejected or annotated without leaving
+// the Desk. Every button writes to the .md file itself.
+
+export function adrDrawer(a: Adr): string {
+  const state = a.status.split(" ")[0].toLowerCase();
+  return `<div class="drawer-back" data-action="drawer-close"></div>
+  <aside class="drawer">
+    <div class="drawer-tools">
+      <button data-action="adr-accept">Accept</button>
+      <button data-action="adr-reject">Reject</button>
+      <button data-action="adr-supersede">Superseded</button>
+      <button data-action="open-adr-file">Open .md</button>
+      <button data-action="drawer-close" class="right">✕</button>
+    </div>
+    <div class="drawer-head">
+      <div><span class="id big">ADR-${esc(a.number)}</span> ${badge("adr", state)}</div>
+      <div class="muted small">${esc(a.date)}${a.phase ? ` · phase ${esc(a.phase)}` : ""} · ${esc(a.path)}</div>
+    </div>
+    <h2>${esc(a.title)}</h2>
+    <div class="body md">${md(a.body)}</div>
+    <h4>Add a note</h4>
+    <p class="muted small">Written into the file under <code>## Notes</code>, so it is in git and the next session reads it.</p>
+    <textarea data-note rows="4" placeholder="Your comment on this decision"></textarea>
+    <div class="row"><button data-action="adr-note" class="primary">Save note</button></div>
+  </aside>`;
+}
+
+// A note box for work items, so a YOURS item can be answered in the window.
+export function itemNotes(): string {
+  return `<h4>Add a note</h4>
+    <p class="muted small">Appended to the item file under <code>## Notes</code>.</p>
+    <textarea data-note rows="3" placeholder="Answer, decision, or anything the next session should know"></textarea>
+    <div class="row"><button data-action="item-note" class="primary">Save note</button></div>`;
 }

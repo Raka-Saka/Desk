@@ -40,7 +40,7 @@ export interface Phase {
   trap: string;
 }
 
-export interface Adr { number: string; title: string; status: string; date: string; phase: string; path: string }
+export interface Adr { number: string; title: string; status: string; date: string; phase: string; path: string; body: string }
 export interface Commit { hash: string; date: string; subject: string }
 export interface SheetRow { id: string; do_: string; expect: string; log: string; automated: boolean }
 export interface Sheet { id: string; title: string; fault: string; rows: SheetRow[] }
@@ -150,7 +150,13 @@ export const api = {
   viewShoot: (frame: Frame, phase: string) => invoke<MediaRecord>("view_shoot", { frame, phase }),
   viewSaveFrame: (frame: Frame) => invoke<Frame[]>("view_save_frame", { frame }),
   viewDeleteFrame: (name: string) => invoke<Frame[]>("view_delete_frame", { name }),
-  saveItem: (item: Item) => invoke<Item>("save_item", { item }),
+  // expectedStamp is the file mtime captured when the item was opened. The
+  // backend refuses the write if the file changed underneath, so a save can no
+  // longer silently clobber an edit made by an agent or another editor.
+  saveItem: (item: Item, expectedStamp?: number) => invoke<Item>("save_item", { item, expectedStamp }),
+  fileStamp: (rel: string) => invoke<number>("file_stamp", { rel }),
+  setAdrStatus: (number: string, status: string, who: string) => invoke<Adr>("set_adr_status", { number, status, who }),
+  appendNote: (rel: string, text: string, who: string) => invoke<void>("append_note", { rel, text, who }),
   nextId: (prefix: string) => invoke<string>("next_id", { prefix }),
   readText: (rel: string) => invoke<string>("read_text", { rel }),
   saveQaRun: (run: QaRun) => invoke<string>("save_qa_run", { run }),
