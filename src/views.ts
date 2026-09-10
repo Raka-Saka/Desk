@@ -243,7 +243,7 @@ export function itemHeader(ws: Workspace, it: Item): string {
     ${kids.length ? `<h4>Children</h4><ul class="tree">${kids.map((k) => `<li class="leaf" data-item="${esc(k.id)}"><span class="id">${esc(k.id)}</span> ${badge("st-" + k.status, k.status.toUpperCase())} ${esc(k.title)}</li>`).join("")}</ul>` : ""}
     ${it.files.length ? `<h4>Files</h4><ul class="files">${it.files.map((f) => `<li>${fileLink(f)}</li>`).join("")}</ul>` : ""}
     ${it.tests.length ? `<h4>Tests</h4><ul class="tests">${it.tests.map((t) => `<li><code>${esc(t)}</code></li>`).join("")}</ul>` : ""}
-    ${it.adrs.length ? `<h4>Decisions</h4><ul>${it.adrs.map((a) => { const adr = ws.adrs.find((x) => x.number === a); return `<li>${adr ? fileLink(adr.path) : esc(a)} ${adr ? esc(adr.title) : ""}</li>`; }).join("")}</ul>` : ""}
+    ${it.adrs.length ? `<h4>Decisions</h4><ul>${it.adrs.map((a) => { const num = a.replace(/^ADR-/i, ""); const adr = ws.adrs.find((x) => x.number === num); return adr ? `<li><a data-action="adr-open" data-adr="${esc(adr.number)}" class="adr-link">ADR-${esc(adr.number)} ${esc(adr.title)}</a></li>` : `<li>${esc(a)}</li>`; }).join("")}</ul>` : ""}
     <div id="item-commits" class="muted small"></div>
     ${itemNotes()}`;
 }
@@ -271,7 +271,7 @@ export function adrDrawer(a: Adr): string {
       <div class="muted small">${esc(a.date)}${a.phase ? ` · phase ${esc(a.phase)}` : ""} · ${esc(a.path)}</div>
     </div>
     <h2>${esc(a.title)}</h2>
-    <div class="body md">${md(a.body)}</div>
+    <div class="body md">${a.body ? md(a.body) : "<p class='warn'>This decision file could not be read.</p>"}</div>
     <h4>Add a note</h4>
     <p class="muted small">Written into the file under <code>## Notes</code>, so it is in git and the next session reads it.</p>
     <textarea data-note rows="4" placeholder="Your comment on this decision"></textarea>

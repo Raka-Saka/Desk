@@ -62,3 +62,6 @@ table.items tr.row-done td{opacity:.6}.item-form{padding:20px;margin-bottom:16px
 /* A decision row opens in the window rather than only linking out. */
 tr.clickable { cursor: pointer; }
 tr.clickable:hover { background: rgba(127,127,127,0.10); }
+
+/* A decision reference opens in the window. */
+.adr-link { cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
