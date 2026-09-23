@@ -1,0 +1,61 @@
+# Build the Windows installer and publish it on a Release.
+#
+# Fires on a pushed tag `v*` (e.g. `v0.1.0`), or by hand from the Actions tab.
+# Basin Desk is Windows-only for now (see README); when macOS and Linux are
+# tested, add them to the matrix rather than assuming they build.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # tauri-action runs `pnpm build` (the beforeBuildCommand), compiles the
+      # Rust, bundles the NSIS installer, then creates the Release and attaches
+      # it. The release is left as a draft so the notes can be read before it
+      # goes out; publish it from the Releases page.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "Basin Desk ${{ github.ref_name }}"
+          releaseBody: |
+            Windows installer for Basin Desk.
+
+            The installer is unsigned, so SmartScreen will warn on first run:
+            **More info** -> **Run anyway**.
+
+            Licensed under the PolyForm Small Business License 1.0.0 (see LICENSE.md):
+            free for companies under 100 people and 1,000,000 USD revenue.
+          releaseDraft: true
+          prerelease: false
