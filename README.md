@@ -5,7 +5,7 @@ scope tree, bugs, QA suites and manual sheets, media by phase, an optional desig
 MCP server so every Claude Code session works through the same operations. Tauri 2 (Rust +
 WebView2), vanilla TypeScript, no server, no browser, no state of its own.
 
-It grew inside [Basin](https://github.com/Raka-Saka/rezo) and was split out so a second project
+It grew inside a solo space-survival game and was split out so a second project
 can have the same discipline. Everything project-specific is one file in the project:
 `desk.json`.
 
@@ -16,6 +16,7 @@ can have the same discipline. Everything project-specific is one file in the pro
 - [docs/FORMATS.md](docs/FORMATS.md) — items, phases, suites, sheets, runs, media, sessions.
 - [docs/VIEW.md](docs/VIEW.md) — the Viewfinder: a chosen viewpoint on a running game, over its remote console.
 - [docs/LIBRARY.md](docs/LIBRARY.md) — the library: sources, claims, candidates, the research action, shared shelves.
+- [docs/MULTISEAT.md](docs/MULTISEAT.md) — more than one seat: what merges, what fights, ids, machine paths, ports, several agents on one working copy.
 
 ## Give a project a desk
 
@@ -72,3 +73,14 @@ and saves are refused in preview mode; the snapshot is the one committed here.
 
 Decisions that shaped it live in Basin's ADRs 0024 (recipes are data the desk edits) and 0025
 (the desk speaks MCP; one writer; classified closures).
+
+## License
+
+Basin Desk is **source-available, not open source**, under the
+[PolyForm Small Business License 1.0.0](LICENSE.md).
+
+In plain terms: it is free to use, change and redistribute inside a company with fewer than 100
+people and under 1,000,000 USD of revenue in the prior tax year — which covers solo developers and
+small studios, the people it was written for. Larger companies need a separate license; ask.
+
+Keep the `Required Notice:` line at the top of `LICENSE.md` with any copy you pass on.
