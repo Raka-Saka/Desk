@@ -4,8 +4,7 @@ version = "0.1.0"
 description = "Basin Desk -- the game-dev desk over docs/tracker"
 authors = ["Florent Herisson"]
 edition = "2021"
-license = "LicenseRef-PolyForm-Small-Business-1.0.0"
-license-file = "../LICENSE.md"
+license = "PolyForm-Small-Business-1.0.0"
 # Two binaries (desk, desk-mcp): the Tauri CLI needs to know which one is the app.
 default-run = "desk"
 
